@@ -1,5 +1,5 @@
 import React from 'react';
-import { Trophy, Medal, Sparkles, Crown, Award, Star, Flag } from 'lucide-react';
+import { Trophy, Medal, Sparkles, Crown, Award, Star, AlertTriangle } from 'lucide-react';
 import { useCompetition } from '../../context/CompetitionContext';
 
 interface WinnerScreenProps {
@@ -7,11 +7,13 @@ interface WinnerScreenProps {
 }
 
 export const WinnerScreen: React.FC<WinnerScreenProps> = ({ onClose }) => {
-  const { leaderboard, setDisplayState } = useCompetition();
+  const { leaderboard, hasActiveTie } = useCompetition();
 
   const champion = leaderboard[0];
   const runnerUp1 = leaderboard[1];
   const runnerUp2 = leaderboard[2];
+
+  const isChampTied = champion?.isTied;
 
   return (
     <div className="min-h-screen bg-slate-950 text-white flex flex-col justify-between p-6 sm:p-12 relative overflow-hidden font-sans select-none">
@@ -62,8 +64,20 @@ export const WinnerScreen: React.FC<WinnerScreenProps> = ({ onClose }) => {
         </div>
       </header>
 
+      {/* Tie Alert on Podium if exists */}
+      {hasActiveTie && (
+        <div className="relative z-10 my-2 max-w-4xl mx-auto bg-amber-950/80 border border-amber-500/80 rounded-2xl p-3 px-4 flex items-center justify-between text-amber-200 text-xs">
+          <div className="flex items-center space-x-2.5">
+            <AlertTriangle className="w-4 h-4 text-amber-400 flex-shrink-0" />
+            <span>
+              <strong>Official Note:</strong> Active tie in tournament scores. Per BRL 2026 rules, tied teams share honors pending referee/organizer determination.
+            </span>
+          </div>
+        </div>
+      )}
+
       {/* Main Podium Centerpiece */}
-      <main className="relative z-10 my-auto py-8 max-w-6xl mx-auto w-full space-y-8">
+      <main className="relative z-10 my-auto py-6 max-w-6xl mx-auto w-full space-y-6">
         
         <div className="text-center space-y-2">
           <div className="inline-flex items-center space-x-2 px-4 py-1.5 rounded-full bg-amber-500/20 border border-amber-500/40 text-amber-300 text-xs font-bold uppercase tracking-widest">
@@ -80,11 +94,11 @@ export const WinnerScreen: React.FC<WinnerScreenProps> = ({ onClose }) => {
           
           {/* Rank 2: Silver (1st Runner Up) */}
           {runnerUp1 && (
-            <div className="md:col-span-3 bg-slate-900/90 border-2 border-slate-600/80 rounded-3xl p-6 relative overflow-hidden shadow-xl flex flex-col justify-between order-2 md:order-1 h-[360px]">
+            <div className="md:col-span-3 bg-slate-900/90 border-2 border-slate-600/80 rounded-3xl p-6 relative overflow-hidden shadow-xl flex flex-col justify-between order-2 md:order-1 min-h-[350px]">
               <div>
                 <div className="flex items-center justify-between mb-4">
                   <span className="w-10 h-10 rounded-full bg-slate-700 text-white flex items-center justify-center font-display font-black text-lg shadow">
-                    #2
+                    {runnerUp1.isTied ? `T-2` : `#2`}
                   </span>
                   <span className="text-xs font-bold uppercase tracking-wider text-slate-300 flex items-center gap-1">
                     <Medal className="w-4 h-4 text-slate-300" /> 1st Runner-Up
@@ -94,7 +108,7 @@ export const WinnerScreen: React.FC<WinnerScreenProps> = ({ onClose }) => {
                 <h3 className="text-xl font-display font-bold text-white leading-tight">
                   {runnerUp1.school.name}
                 </h3>
-                <div className="text-sm font-semibold text-cyan-300 mt-1">
+                <div className="text-sm font-semibold text-blue-300 mt-1">
                   {runnerUp1.school.teamName}
                 </div>
                 <div className="text-xs text-slate-400 mt-0.5">
@@ -117,17 +131,17 @@ export const WinnerScreen: React.FC<WinnerScreenProps> = ({ onClose }) => {
 
           {/* Rank 1: Gold (Grand Champion) */}
           {champion && (
-            <div className="md:col-span-5 bg-gradient-to-b from-[#241a05] via-slate-900 to-[#191204] border-2 border-amber-400 rounded-3xl p-8 relative overflow-hidden shadow-2xl shadow-amber-500/30 flex flex-col justify-between order-1 md:order-2 h-[430px] z-20">
+            <div className="md:col-span-5 bg-gradient-to-b from-[#241a05] via-slate-900 to-[#191204] border-2 border-amber-400 rounded-3xl p-8 relative overflow-hidden shadow-2xl shadow-amber-500/30 flex flex-col justify-between order-1 md:order-2 min-h-[420px] z-20">
               <div className="absolute top-0 right-0 left-0 h-1.5 bg-gradient-to-r from-amber-400 via-yellow-200 to-amber-500"></div>
 
               <div>
                 <div className="flex items-center justify-between mb-4">
                   <div className="w-14 h-14 rounded-full bg-gradient-to-tr from-amber-500 to-yellow-300 text-slate-950 flex items-center justify-center font-display font-black text-2xl shadow-xl shadow-amber-500/40 border-2 border-yellow-200">
-                    #1
+                    {isChampTied ? `T-1` : `#1`}
                   </div>
                   <div className="inline-flex items-center space-x-1.5 px-3 py-1 rounded-full bg-amber-500/30 border border-amber-400 text-amber-300 text-xs font-display font-black tracking-widest uppercase">
                     <Trophy className="w-4 h-4 text-amber-400" />
-                    <span>GRAND CHAMPION</span>
+                    <span>{isChampTied ? 'CO-GRAND CHAMPION' : 'GRAND CHAMPION'}</span>
                   </div>
                 </div>
 
@@ -163,11 +177,11 @@ export const WinnerScreen: React.FC<WinnerScreenProps> = ({ onClose }) => {
 
           {/* Rank 3: Bronze (2nd Runner Up) */}
           {runnerUp2 && (
-            <div className="md:col-span-3 bg-slate-900/90 border-2 border-amber-900/60 rounded-3xl p-6 relative overflow-hidden shadow-xl flex flex-col justify-between order-3 h-[330px]">
+            <div className="md:col-span-3 bg-slate-900/90 border-2 border-amber-900/60 rounded-3xl p-6 relative overflow-hidden shadow-xl flex flex-col justify-between order-3 min-h-[320px]">
               <div>
                 <div className="flex items-center justify-between mb-4">
                   <span className="w-10 h-10 rounded-full bg-amber-950 border border-amber-700 text-amber-300 flex items-center justify-center font-display font-black text-lg shadow">
-                    #3
+                    {runnerUp2.isTied ? `T-3` : `#3`}
                   </span>
                   <span className="text-xs font-bold uppercase tracking-wider text-amber-600 flex items-center gap-1">
                     <Medal className="w-4 h-4 text-amber-600" /> 2nd Runner-Up
@@ -177,7 +191,7 @@ export const WinnerScreen: React.FC<WinnerScreenProps> = ({ onClose }) => {
                 <h3 className="text-xl font-display font-bold text-white leading-tight">
                   {runnerUp2.school.name}
                 </h3>
-                <div className="text-sm font-semibold text-cyan-300 mt-1">
+                <div className="text-sm font-semibold text-blue-300 mt-1">
                   {runnerUp2.school.teamName}
                 </div>
                 <div className="text-xs text-slate-400 mt-0.5">

@@ -1,208 +1,203 @@
-export interface WeightTier {
+// ========================================================
+// OFFICIAL BHARAT ROBOTICS LEAGUE (BRL) 2026 SCORING SYSTEM
+// Authoritative scoring definitions for 29 September 2026
+// ========================================================
+
+export interface BlockWeightDefinition {
   id: string;
-  name: string;
-  weightRange: string;
-  basePoints: number;
-  description: string;
-}
-
-export interface PullTier {
-  id: string;
-  name: string;
-  weight: string;
-  basePoints: number;
-  description: string;
-}
-
-export interface ZoneOption {
-  id: 'outer' | 'middle' | 'bullseye';
   label: string;
-  multiplier: number;
+  weightGrams: number;
+  fullPoints: number;
+  incompletePoints: number; // 50%
   description: string;
 }
 
-export interface DistanceOption {
-  id: 'full' | 'three_quarters' | 'half' | 'quarter';
-  label: string;
-  multiplier: number;
-  description: string;
+// The official 6 block weights used across BRL 2026
+export const OFFICIAL_BLOCK_WEIGHTS: BlockWeightDefinition[] = [
+  {
+    id: '200g',
+    label: '200 g',
+    weightGrams: 200,
+    fullPoints: 20,
+    incompletePoints: 10,
+    description: 'Light maneuverability block (Full: 20 pts, Incomplete: 10 pts)'
+  },
+  {
+    id: '500g',
+    label: '500 g',
+    weightGrams: 500,
+    fullPoints: 30,
+    incompletePoints: 15,
+    description: 'Medium balanced block (Full: 30 pts, Incomplete: 15 pts)'
+  },
+  {
+    id: '700g',
+    label: '700 g',
+    weightGrams: 700,
+    fullPoints: 40,
+    incompletePoints: 20,
+    description: 'Medium-heavy block (Full: 40 pts, Incomplete: 20 pts)'
+  },
+  {
+    id: '1kg',
+    label: '1 kg',
+    weightGrams: 1000,
+    fullPoints: 60,
+    incompletePoints: 30,
+    description: 'Heavy 1 kg challenge block (Full: 60 pts, Incomplete: 30 pts)'
+  },
+  {
+    id: '2kg',
+    label: '2 kg',
+    weightGrams: 2000,
+    fullPoints: 80,
+    incompletePoints: 40,
+    description: 'Super-heavy 2 kg friction block (Full: 80 pts, Incomplete: 40 pts)'
+  },
+  {
+    id: '4kg',
+    label: '4 kg',
+    weightGrams: 4000,
+    fullPoints: 100,
+    incompletePoints: 50,
+    description: 'Maximum legal 4 kg titan block (Full: 100 pts, Incomplete: 50 pts)'
+  }
+];
+
+// --- EVENT 1: BLOCK PUSH CHALLENGE ---
+// Theme: BLUE (#2563eb / #3b82f6)
+export const BLOCK_PUSH_CONFIG = {
+  eventName: 'Block Push Challenge',
+  themeColor: 'blue',
+  totalTimeSeconds: 120,
+  maxTimeBonus: 120,
+  timeBonusRate: 1, // 1 point per second left
+  description: '120 seconds. Pushed completely inside box = 100% points. Any portion outside = 50% points. Time left = 1 pt/sec bonus.'
+};
+
+export interface BlockPushInputBlock {
+  weightId: string;
+  status: 'none' | 'complete' | 'incomplete';
 }
 
-export const OFFICIAL_BLOCK_PUSH_TIERS: WeightTier[] = [
-  {
-    id: 'push_tier_1',
-    name: 'Category 1: Light Block',
-    weightRange: '100g - 250g',
-    basePoints: 20,
-    description: 'Precision maneuverability tier for rapid placement.'
-  },
-  {
-    id: 'push_tier_2',
-    name: 'Category 2: Medium Block',
-    weightRange: '251g - 500g',
-    basePoints: 40,
-    description: 'Balanced mass challenge testing chassis torque.'
-  },
-  {
-    id: 'push_tier_3',
-    name: 'Category 3: Heavy Block',
-    weightRange: '501g - 1000g (1 kg)',
-    basePoints: 70,
-    description: 'High friction payload demanding high-traction drivetrains.'
-  },
-  {
-    id: 'push_tier_4',
-    name: 'Category 4: Super Heavy Block',
-    weightRange: '1001g - 1750g (1.75 kg)',
-    basePoints: 110,
-    description: 'Dense metal block requiring high torque transmission.'
-  },
-  {
-    id: 'push_tier_5',
-    name: 'Category 5: Titan Mega Block',
-    weightRange: '1751g - 2500g (2.5 kg)',
-    basePoints: 160,
-    description: 'Maximum legal competition block payload for peak pushing power.'
-  }
-];
+export const calculateBlockPushScore = (
+  blocks: BlockPushInputBlock[],
+  timeLeftSeconds: number
+) => {
+  const safeTimeLeft = Math.max(0, Math.min(BLOCK_PUSH_CONFIG.totalTimeSeconds, Math.floor(timeLeftSeconds || 0)));
+  const timeBonus = safeTimeLeft * BLOCK_PUSH_CONFIG.timeBonusRate;
 
-export const OFFICIAL_PUSH_ZONES: ZoneOption[] = [
-  {
-    id: 'outer',
-    label: 'Outer Scoring Perimeter',
-    multiplier: 1.0,
-    description: 'Block pushed fully past arena baseline (1.0x Base Points)'
-  },
-  {
-    id: 'middle',
-    label: 'Intermediate Target Zone',
-    multiplier: 1.5,
-    description: 'Block situated inside the marked secondary square (1.5x Base Points)'
-  },
-  {
-    id: 'bullseye',
-    label: 'Center Bullseye Zone',
-    multiplier: 2.0,
-    description: 'Block centered in the high-value bullseye target (2.0x Base Points)'
-  }
-];
+  let blockScore = 0;
+  const processedBlocks = OFFICIAL_BLOCK_WEIGHTS.map(def => {
+    const matched = blocks.find(b => b.weightId === def.id);
+    const status = matched ? matched.status : 'none';
+    let points = 0;
+    if (status === 'complete') points = def.fullPoints;
+    else if (status === 'incomplete') points = def.incompletePoints;
 
-export const OFFICIAL_PUSH_BONUSES = {
-  cleanAutonomousRun: 20, // Zero manual intervention or flawless alignment
-  speedUnder60s: 15,      // Course completed within 60 seconds
+    blockScore += points;
+    return {
+      weightId: def.id,
+      weightLabel: def.label,
+      status,
+      pointsEarned: points
+    };
+  });
+
+  const finalScore = blockScore + timeBonus;
+
+  return {
+    blocks: processedBlocks,
+    blockScore,
+    timeLeftSeconds: safeTimeLeft,
+    timeBonus,
+    finalScore,
+    calculatedScore: finalScore
+  };
 };
 
-export const OFFICIAL_PUSH_PENALTIES = {
-  boundaryBreach: 5,      // Touching arena boundary markers per incident
-  robotManualReset: 15,   // Touching the bot for mechanical reset
+// --- EVENT 2: BLOCK PULL CHALLENGE ---
+// Theme: GREEN (#059669 / #10b981)
+export const BLOCK_PULL_CONFIG = {
+  eventName: 'Block Pull Challenge',
+  themeColor: 'green',
+  totalTimeSeconds: 120,
+  maxTimeBonus: 120,
+  timeBonusRate: 1, // 1 point per second left
+  penaltyPerTouch: 5, // -5 pts per boundary touch
+  description: '120 seconds. Full points per pulled block. Time left = 1 pt/sec bonus. Boundary touch = -5 pts penalty each.'
 };
 
-export const OFFICIAL_BLOCK_PULL_TIERS: PullTier[] = [
-  {
-    id: 'pull_tier_1',
-    name: 'Tier 1: 1.0 kg Sled Tow',
-    weight: '1.0 kg',
-    basePoints: 40,
-    description: 'Standard friction drag sled over the rubberized pulling lane.'
-  },
-  {
-    id: 'pull_tier_2',
-    name: 'Tier 2: 2.0 kg Sled Tow',
-    weight: '2.0 kg',
-    basePoints: 75,
-    description: 'Intermediate weight test evaluating wheel adhesion and motor gearing.'
-  },
-  {
-    id: 'pull_tier_3',
-    name: 'Tier 3: 3.0 kg Sled Tow',
-    weight: '3.0 kg',
-    basePoints: 115,
-    description: 'Heavy duty pull requiring specialized high-torque gearboxes.'
-  },
-  {
-    id: 'pull_tier_4',
-    name: 'Tier 4: 4.0 kg Heavy Titan',
-    weight: '4.0 kg',
-    basePoints: 160,
-    description: 'Extreme drag resistance testing structural rigidity under tension.'
-  },
-  {
-    id: 'pull_tier_5',
-    name: 'Tier 5: 5.0 kg Maximum Load',
-    weight: '5.0 kg',
-    basePoints: 210,
-    description: 'Maximum arena towing capacity for elite robotics engineering.'
-  }
-];
+export const calculateBlockPullScore = (
+  pulledBlockIds: string[],
+  timeLeftSeconds: number,
+  boundaryTouches: number
+) => {
+  const safeTimeLeft = Math.max(0, Math.min(BLOCK_PULL_CONFIG.totalTimeSeconds, Math.floor(timeLeftSeconds || 0)));
+  const timeBonus = safeTimeLeft * BLOCK_PULL_CONFIG.timeBonusRate;
+  const safeTouches = Math.max(0, Math.floor(boundaryTouches || 0));
+  const boundaryPenalty = safeTouches * BLOCK_PULL_CONFIG.penaltyPerTouch;
 
-export const OFFICIAL_PULL_DISTANCES: DistanceOption[] = [
-  {
-    id: 'full',
-    label: '100% Full Arena Lane (Finished)',
-    multiplier: 1.0,
-    description: 'Complete crossing of the finish line marker'
-  },
-  {
-    id: 'three_quarters',
-    label: '75% Distance Marker Reached',
-    multiplier: 0.75,
-    description: 'Sled crossed the 75% mark before timeout'
-  },
-  {
-    id: 'half',
-    label: '50% Distance Marker Reached',
-    multiplier: 0.50,
-    description: 'Sled crossed the halfway mark before timeout'
-  },
-  {
-    id: 'quarter',
-    label: '25% Distance Marker Reached',
-    multiplier: 0.25,
-    description: 'Initial launch achieved but stalled before halfway'
-  }
-];
+  let blockScore = 0;
+  pulledBlockIds.forEach(id => {
+    const def = OFFICIAL_BLOCK_WEIGHTS.find(w => w.id === id);
+    if (def) {
+      blockScore += def.fullPoints;
+    }
+  });
 
-export const OFFICIAL_PULL_BONUSES = {
-  sub45sSpeed: 25,     // Completed full tow under 45 seconds
-  zeroWheelSlip: 15,   // Flawless continuous traction
+  const rawTotal = blockScore + timeBonus - boundaryPenalty;
+  const finalScore = Math.max(0, rawTotal);
+
+  return {
+    pulledBlockIds,
+    blockScore,
+    timeLeftSeconds: safeTimeLeft,
+    timeBonus,
+    boundaryTouches: safeTouches,
+    boundaryPenalty,
+    finalScore,
+    calculatedScore: finalScore,
+    penaltyPoints: boundaryPenalty
+  };
 };
 
-export const OFFICIAL_PULL_PENALTIES = {
-  laneBoundaryTouch: 10,  // Touching the side safety rails
-  cableHitchDisconnect: 20 // Sled decoupling requiring stoppage
+// --- EVENT 3: ROBO WAR ---
+// Theme: RED (#dc2626 / #ef4444)
+export const ROBO_WAR_CONFIG = {
+  eventName: 'Robo War',
+  themeColor: 'red',
+  totalTimeSeconds: 90,
+  maxTimeSeconds: 90,
+  inPitMultiplier: 3,
+  outPitMultiplier: 2,
+  description: '90 seconds head-to-head. Opponent in IN-PIT = Time Left × 3 pts. Opponent in OUT-PIT = Time Left × 2 pts. Loser receives 0 pts.'
 };
 
-export const OFFICIAL_ROBOT_WAR_RULES = {
-  knockout: {
-    label: 'Knockout / Arena Out / Immobilization',
-    winnerPoints: 100,
-    loserPoints: 20,
-    description: 'Opponent robot pushed out of the arena pit, flipped, or immobilized for >10 seconds.'
-  },
-  judgesDecision: {
-    label: 'Judges Decision (Points / Damage & Control)',
-    winnerPoints: 75,
-    loserPoints: 35,
-    description: 'Full round elapsed with both robots active; judges award decision on aggression and arena control.'
-  },
-  draw: {
-    label: 'Double Immobilization / Technical Draw',
-    teamAPoints: 50,
-    teamBPoints: 50,
-    description: 'Simultaneous failure or neutral stalemate after full regulation period.'
-  },
-  disqualification: {
-    label: 'Rule Infraction / Disqualification',
-    winnerPoints: 90,
-    loserPoints: 0,
-    description: 'Severe rule violation, weapon breach, or safety cutoff activation.'
-  }
+export const calculateRoboWarScore = (
+  winner: 'team_a' | 'team_b',
+  pitType: 'in_pit' | 'out_pit',
+  timeLeftSeconds: number
+) => {
+  const safeTimeLeft = Math.max(0, Math.min(ROBO_WAR_CONFIG.totalTimeSeconds, Math.floor(timeLeftSeconds || 0)));
+  const multiplier = pitType === 'in_pit' ? ROBO_WAR_CONFIG.inPitMultiplier : ROBO_WAR_CONFIG.outPitMultiplier;
+  const winnerPoints = safeTimeLeft * multiplier;
+  const loserPoints = 0;
+
+  return {
+    multiplier,
+    timeLeftSeconds: safeTimeLeft,
+    teamAPoints: winner === 'team_a' ? winnerPoints : loserPoints,
+    teamBPoints: winner === 'team_b' ? winnerPoints : loserPoints,
+    winnerPoints,
+    loserPoints
+  };
 };
 
-export const OFFICIAL_TIE_BREAK_POLICY = [
-  '1. Primary: Cumulative Total Points (Round 1 + Round 2 + Round 3)',
-  '2. Tie-Breaker 1: Highest Round 3 (Robot War) Points',
-  '3. Tie-Breaker 2: Highest Round 2 (Block Pull) Points',
-  '4. Tie-Breaker 3: Highest Round 1 (Block Push) Points',
-  '5. Tie-Breaker 4: Lowest Cumulative Penalties Incurred across all stages'
-];
+// --- TIE HANDLING POLICY ---
+// Rule: Do NOT invent or assume a tie-break rule.
+// If two or more teams have exactly the same final score, display them as tied and flag the tie for organizer decision.
+export const OFFICIAL_TIE_POLICY = {
+  hasTieBreaker: false,
+  message: 'TIE DETECTED: Multiple teams share identical total points. Awaiting official referee / organizer decision.'
+};

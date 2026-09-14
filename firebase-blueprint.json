@@ -1,0 +1,114 @@
+{
+  "entities": {
+    "Competition": {
+      "title": "Competition",
+      "description": "Master tournament state, active round, display view, and queues",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "eventName": { "type": "string" },
+        "year": { "type": "string" },
+        "eventDate": { "type": "string" },
+        "status": { "type": "string", "enum": ["not_started", "live", "paused", "completed"] },
+        "currentRound": { "type": "number" },
+        "displayState": { "type": "string" },
+        "activeRobotWarMatchId": { "type": "string" },
+        "grandWinnerSchoolId": { "type": "string" },
+        "runQueue": { "type": "object" },
+        "lastUpdated": { "type": "number" }
+      },
+      "required": ["eventName", "status", "currentRound", "displayState"]
+    },
+    "School": {
+      "title": "School",
+      "description": "School and team registration details",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "teamName": { "type": "string" },
+        "teamNumber": { "type": "string" },
+        "city": { "type": "string" },
+        "students": { "type": "array" },
+        "isActive": { "type": "boolean" },
+        "updatedAt": { "type": "string" }
+      },
+      "required": ["id", "name", "teamName", "teamNumber", "city", "isActive"]
+    },
+    "Score": {
+      "title": "Score",
+      "description": "Team official scores across Round 1, Round 2, and Round 3",
+      "type": "object",
+      "properties": {
+        "schoolId": { "type": "string" },
+        "round1": { "type": "object" },
+        "round2": { "type": "object" },
+        "round3Score": { "type": "number" },
+        "totalScore": { "type": "number" },
+        "updatedAt": { "type": "string" }
+      },
+      "required": ["schoolId", "totalScore"]
+    },
+    "RobotWarMatch": {
+      "title": "RobotWarMatch",
+      "description": "Robo War head-to-head combat arena match record",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "matchNumber": { "type": "number" },
+        "teamAId": { "type": "string" },
+        "teamBId": { "type": "string" },
+        "result": { "type": "string" },
+        "winnerId": { "type": "string" },
+        "pitType": { "type": "string" },
+        "timeLeftSeconds": { "type": "number" },
+        "multiplier": { "type": "number" },
+        "teamAPoints": { "type": "number" },
+        "teamBPoints": { "type": "number" },
+        "status": { "type": "string" },
+        "isDraft": { "type": "boolean" },
+        "publishedAt": { "type": "string" }
+      },
+      "required": ["id", "matchNumber", "teamAId", "teamBId", "status"]
+    },
+    "AuditLog": {
+      "title": "AuditLog",
+      "description": "Scoring audit trail log entry for competition integrity",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "timestamp": { "type": "string" },
+        "round": { "type": "number" },
+        "schoolName": { "type": "string" },
+        "teamName": { "type": "string" },
+        "action": { "type": "string" },
+        "operatorNote": { "type": "string" },
+        "newScore": { "type": "number" },
+        "createdAt": { "type": "number" }
+      },
+      "required": ["id", "timestamp", "action"]
+    }
+  },
+  "firestore": {
+    "/competitions/{competitionId}": {
+      "schema": { "$ref": "#/entities/Competition" },
+      "description": "Master tournament states and real-time synchronizations"
+    },
+    "/schools/{schoolId}": {
+      "schema": { "$ref": "#/entities/School" },
+      "description": "Schools and teams registered in Bharat Robotics League"
+    },
+    "/scores/{schoolId}": {
+      "schema": { "$ref": "#/entities/Score" },
+      "description": "Official scores for each school team"
+    },
+    "/robotWarMatches/{matchId}": {
+      "schema": { "$ref": "#/entities/RobotWarMatch" },
+      "description": "Robo War head-to-head combat matches"
+    },
+    "/auditLogs/{logId}": {
+      "schema": { "$ref": "#/entities/AuditLog" },
+      "description": "Integrity audit trail entries"
+    }
+  }
+}

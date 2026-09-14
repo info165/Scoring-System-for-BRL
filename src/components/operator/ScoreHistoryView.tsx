@@ -4,9 +4,7 @@ import {
   Search, 
   Download, 
   ShieldCheck, 
-  Filter, 
   Clock, 
-  Send, 
   CheckCircle,
   FileText
 } from 'lucide-react';
@@ -17,13 +15,15 @@ export const ScoreHistoryView: React.FC = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [roundFilter, setRoundFilter] = useState<string>('all');
 
-  const logs = state.auditLog || [];
+  const logs = state.auditLogs || [];
 
   const filteredLogs = logs.filter(log => {
+    const q = searchTerm.toLowerCase();
     const matchesSearch = 
-      log.schoolName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      log.details.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      log.action.toLowerCase().includes(searchTerm.toLowerCase());
+      (log.schoolName && log.schoolName.toLowerCase().includes(q)) ||
+      (log.teamName && log.teamName.toLowerCase().includes(q)) ||
+      (log.action && log.action.toLowerCase().includes(q)) ||
+      (log.operatorNote && log.operatorNote.toLowerCase().includes(q));
 
     const matchesRound = 
       roundFilter === 'all' || 
@@ -56,7 +56,7 @@ export const ScoreHistoryView: React.FC = () => {
             OFFICIAL SCORING AUDIT TRAIL
           </h2>
           <p className="text-xs text-slate-400 mt-0.5">
-            Every published score, queue change, and referee decision is timestamped and recorded for complete competition transparency.
+            Every published score, calculation, and referee decision is timestamped and recorded for complete competition transparency.
           </p>
         </div>
 
@@ -107,7 +107,7 @@ export const ScoreHistoryView: React.FC = () => {
       <div className="bg-slate-900/80 border border-slate-800 rounded-2xl overflow-hidden shadow-xl">
         <div className="p-4 bg-slate-950 border-b border-slate-800 flex items-center justify-between text-xs text-slate-400">
           <span>Total Recorded Events: <strong className="text-white">{filteredLogs.length}</strong></span>
-          <span>Event Date: 29 September 2026</span>
+          <span>Competition Date: 29 September 2026</span>
         </div>
 
         <div className="divide-y divide-slate-800/80 max-h-[600px] overflow-y-auto">
@@ -137,13 +137,20 @@ export const ScoreHistoryView: React.FC = () => {
                       )}
                       {log.schoolName && (
                         <span className="font-bold text-white">
-                          {log.schoolName}
+                          {log.schoolName} {log.teamName ? `(${log.teamName})` : ''}
                         </span>
                       )}
                     </div>
-                    <div className="text-slate-300 text-[11px] pl-0.5">
-                      {log.details}
-                    </div>
+                    {log.operatorNote && (
+                      <div className="text-slate-300 text-[11px] pl-0.5">
+                        {log.operatorNote}
+                      </div>
+                    )}
+                    {(log.oldScore !== undefined || log.newScore !== undefined) && (
+                      <div className="text-slate-400 text-[10px] font-mono pl-0.5">
+                        Score change: {log.oldScore ?? 0} pts &rarr; <strong className="text-amber-300">{log.newScore ?? 0} pts</strong>
+                      </div>
+                    )}
                   </div>
 
                   <div className="flex items-center space-x-2 text-slate-400 font-mono text-[11px] self-end sm:self-auto flex-shrink-0">

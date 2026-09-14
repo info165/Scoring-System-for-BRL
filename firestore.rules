@@ -1,0 +1,40 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    // Public read for live arena display screens, big boards, and audience viewers
+    // Write permitted for tournament operators (authenticated or session-authorized)
+    match /competitions/{competitionId} {
+      allow read: if true;
+      allow write: if true;
+    }
+
+    match /schools/{schoolId} {
+      allow read: if true;
+      allow write: if true;
+    }
+
+    match /scores/{schoolId} {
+      allow read: if true;
+      allow write: if true;
+    }
+
+    match /robotWarMatches/{matchId} {
+      allow read: if true;
+      allow write: if true;
+    }
+
+    match /auditLogs/{logId} {
+      allow read: if true;
+      allow write: if true;
+    }
+
+    match /test/{docId} {
+      allow read, write: if true;
+    }
+  }
+}

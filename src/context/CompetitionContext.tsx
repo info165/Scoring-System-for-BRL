@@ -7,22 +7,34 @@ import {
   RobotWarMatch, 
   CompetitionStatus, 
   PublicDisplayState,
-  AuditLogEntry
+  AuditLogEntry,
+  PitType
 } from '../types';
 import { INITIAL_DEMO_SCHOOLS, INITIAL_PRESET_MATCHES } from '../data/demoSchools';
 import { 
-  OFFICIAL_BLOCK_PUSH_TIERS, 
-  OFFICIAL_PUSH_ZONES,
-  OFFICIAL_BLOCK_PULL_TIERS, 
-  OFFICIAL_PULL_DISTANCES,
-  OFFICIAL_ROBOT_WAR_RULES 
+  OFFICIAL_BLOCK_WEIGHTS,
+  BLOCK_PUSH_CONFIG,
+  BLOCK_PULL_CONFIG,
+  ROBO_WAR_CONFIG,
+  calculateBlockPushScore,
+  calculateBlockPullScore,
+  calculateRoboWarScore
 } from '../data/officialRules';
+import { 
+  initFirebaseAuth, 
+  testConnection, 
+  subscribeToCompetitionState, 
+  saveCompetitionStateToFirestore, 
+  fetchCompetitionStateFromFirestore 
+} from '../lib/firebase';
 
-const STORAGE_KEY = 'BRL_2026_COMPETITION_STATE_V2';
+const STORAGE_KEY = 'BRL_2026_COMPETITION_STATE_V3';
 const SYNC_CHANNEL_NAME = 'BRL_2026_SYNC_CHANNEL';
 
 export interface LeaderboardRow {
   rank: number;
+  isTied: boolean;
+  tiedTeamCount: number;
   school: School;
   round1Score: number;
   round2Score: number;
@@ -36,11 +48,13 @@ export interface LeaderboardRow {
 interface CompetitionContextType {
   state: CompetitionState;
   leaderboard: LeaderboardRow[];
+  hasActiveTie: boolean;
+  tiedRanks: number[];
   currentSchool: School | null;
   upNextSchool: School | null;
   followingSchool: School | null;
   activeRobotWarMatch: RobotWarMatch | null;
-  grandWinner: { school: School; row: LeaderboardRow } | null;
+  grandWinner: { school: School; row: LeaderboardRow; isTiedWinner: boolean } | null;
   
   // Navigation / State controls
   setCurrentRound: (round: 1 | 2 | 3) => void;
@@ -53,17 +67,17 @@ interface CompetitionContextType {
   reorderQueue: (newQueueIds: string[]) => void;
   
   // Scoring Operations
-  saveBlockPushDraft: (schoolId: string, scoreData: Partial<BlockPushScore>) => void;
+  saveBlockPushDraft: (schoolId: string, scoreData: BlockPushScore) => void;
   publishBlockPushScore: (schoolId: string, scoreData: Omit<BlockPushScore, 'isDraft' | 'publishedAt'>) => void;
   
-  saveBlockPullDraft: (schoolId: string, scoreData: Partial<BlockPullScore>) => void;
+  saveBlockPullDraft: (schoolId: string, scoreData: BlockPullScore) => void;
   publishBlockPullScore: (schoolId: string, scoreData: Omit<BlockPullScore, 'isDraft' | 'publishedAt'>) => void;
   
   // Robot War Operations
   createRobotWarMatch: (teamAId: string, teamBId: string, matchNotes?: string) => string;
   setActiveRobotWarMatch: (matchId: string | null) => void;
-  saveRobotWarDraft: (matchId: string, result: RobotWarMatch['result'], winType?: RobotWarMatch['winType'], notes?: string) => void;
-  publishRobotWarResult: (matchId: string, result: 'team_a_win' | 'team_b_win' | 'draw', winType?: RobotWarMatch['winType'], notes?: string) => void;
+  saveRobotWarDraft: (matchId: string, winner: 'team_a' | 'team_b', pitType: PitType, timeLeftSeconds: number, notes?: string) => void;
+  publishRobotWarResult: (matchId: string, winner: 'team_a' | 'team_b', pitType: PitType, timeLeftSeconds: number, notes?: string) => void;
   
   // School Master Data
   addSchool: (school: Omit<School, 'id'>) => void;
@@ -80,13 +94,66 @@ interface CompetitionContextType {
   // Audits & Corrections
   correctScoreManually: (round: 1 | 2 | 3, schoolId: string, newScore: number, reason: string) => void;
   resetAllCompetitionData: () => void;
+  resetAllScores: () => void;
+  importState: (newState: CompetitionState) => void;
   undoLastAction: () => void;
   canUndo: boolean;
   
   // View mode helper
   isDisplayMode: boolean;
   setIsDisplayMode: (val: boolean) => void;
+
+  // Cloud & Firebase Real-time Sync
+  isFirebaseConnected: boolean;
+  isFirebaseSyncing: boolean;
+  lastCloudSync: string | null;
+  forceCloudSync: () => Promise<void>;
 }
+
+// Initial demo score records pre-calculated with the official BRL 2026 rules
+const samplePushDPS = calculateBlockPushScore(
+  [
+    { weightId: '4kg', status: 'complete' }, // 100
+    { weightId: '2kg', status: 'complete' }  // 80
+  ],
+  25 // Time left = 25s -> Bonus = 25
+);
+
+const samplePullDPS = calculateBlockPullScore(
+  ['2kg', '1kg', '500g'], // 80 + 60 + 30 = 170
+  30, // Time left = 30s -> Bonus = 30
+  1 // 1 touch -> Penalty = 5
+); // 170 + 30 - 5 = 195
+
+const samplePushBombay = calculateBlockPushScore(
+  [
+    { weightId: '1kg', status: 'complete' },  // 60
+    { weightId: '700g', status: 'complete' }, // 40
+    { weightId: '200g', status: 'complete' }  // 20
+  ],
+  35 // Time left = 35s -> Bonus = 35
+); // 120 + 35 = 155
+
+const samplePullBombay = calculateBlockPullScore(
+  ['2kg', '1kg'], // 80 + 60 = 140
+  25, // Time left = 25s -> Bonus = 25
+  1 // 1 touch -> Penalty = 5
+); // 140 + 25 - 5 = 160
+
+const samplePushKVPowai = calculateBlockPushScore(
+  [
+    { weightId: '2kg', status: 'complete' },   // 80
+    { weightId: '500g', status: 'complete' },  // 30
+    { weightId: '4kg', status: 'incomplete' }  // 50 (100 * 50%)
+  ],
+  20 // Time left = 20s -> Bonus = 20
+); // 160 + 20 = 180
+
+const samplePullKVPowai = calculateBlockPullScore(
+  ['4kg', '700g'], // 100 + 40 = 140
+  15, // Time left = 15s -> Bonus = 15
+  0 // 0 touches
+); // 140 + 15 = 155
 
 const defaultInitialState: CompetitionState = {
   eventName: 'Bharat Robotics League',
@@ -131,134 +198,145 @@ const defaultInitialState: CompetitionState = {
   },
   schools: INITIAL_DEMO_SCHOOLS,
   scores: {
-    // Pre-populate realistic published score samples for demonstration, clearly marked
+    'sch_delhi_public': {
+      schoolId: 'sch_delhi_public',
+      round1: {
+        ...samplePushDPS,
+        isDraft: false,
+        publishedAt: '2026-09-29T10:05:00Z',
+        notes: 'Exceptional autonomous placement of 4kg and 2kg blocks'
+      },
+      round2: {
+        ...samplePullDPS,
+        isDraft: false,
+        publishedAt: '2026-09-29T11:10:00Z',
+        notes: 'High-torque triple payload tow'
+      },
+      round3Score: 120, // Match 1 In-Pit (40s * 3)
+      totalScore: samplePushDPS.finalScore + samplePullDPS.finalScore + 120 // 205 + 195 + 120 = 520
+    },
     'sch_bombay_scottish': {
       schoolId: 'sch_bombay_scottish',
       round1: {
-        weightTierId: 'push_tier_3',
-        weightCategoryLabel: 'Category 3: Heavy Block (1 kg)',
-        basePoints: 70,
-        quantity: 1,
-        targetZone: 'bullseye',
-        zoneMultiplier: 2.0,
-        timeSeconds: 48,
-        bonusCleanRun: true,
-        bonusSpeedRun: true,
-        bonusPoints: 35,
-        penaltyBoundary: 0,
-        penaltyReset: 0,
-        penaltyPoints: 0,
-        calculatedScore: 175,
+        ...samplePushBombay,
         isDraft: false,
-        publishedAt: '2026-09-29T10:15:00Z',
-        notes: 'Exceptional autonomous center positioning'
+        publishedAt: '2026-09-29T10:20:00Z',
+        notes: 'Clean run, 3 blocks pushed completely inside target zone'
       },
       round2: {
-        pullTierId: 'pull_tier_3',
-        pullTierLabel: 'Tier 3: 3.0 kg Sled Tow',
-        basePoints: 115,
-        distanceAchieved: 'full',
-        distanceMultiplier: 1.0,
-        timeSeconds: 38,
-        bonusSpeed: true,
-        bonusZeroSlip: true,
-        bonusPoints: 40,
-        penaltyLineFoul: 0,
-        penaltyDisconnect: 0,
-        penaltyPoints: 0,
-        calculatedScore: 155,
+        ...samplePullBombay,
         isDraft: false,
-        publishedAt: '2026-09-29T11:20:00Z'
+        publishedAt: '2026-09-29T11:25:00Z'
       },
-      round3Score: 75,
-      totalScore: 405
+      round3Score: 90, // Match 2 In-Pit (30s * 3)
+      totalScore: samplePushBombay.finalScore + samplePullBombay.finalScore + 90 // 155 + 160 + 90 = 405
     },
     'sch_kv_iit_powai': {
       schoolId: 'sch_kv_iit_powai',
       round1: {
-        weightTierId: 'push_tier_4',
-        weightCategoryLabel: 'Category 4: Super Heavy Block (1.75 kg)',
-        basePoints: 110,
-        quantity: 1,
-        targetZone: 'middle',
-        zoneMultiplier: 1.5,
-        timeSeconds: 52,
-        bonusCleanRun: true,
-        bonusSpeedRun: true,
-        bonusPoints: 35,
-        penaltyBoundary: 1,
-        penaltyReset: 0,
-        penaltyPoints: 5,
-        calculatedScore: 195,
+        ...samplePushKVPowai,
         isDraft: false,
-        publishedAt: '2026-09-29T10:30:00Z'
+        publishedAt: '2026-09-29T10:35:00Z',
+        notes: '4kg block partially in zone (awarded 50% incomplete points)'
       },
       round2: {
-        pullTierId: 'pull_tier_4',
-        pullTierLabel: 'Tier 4: 4.0 kg Heavy Titan',
-        basePoints: 160,
-        distanceAchieved: 'full',
-        distanceMultiplier: 1.0,
-        timeSeconds: 42,
-        bonusSpeed: true,
-        bonusZeroSlip: false,
-        bonusPoints: 25,
-        penaltyLineFoul: 0,
-        penaltyDisconnect: 0,
-        penaltyPoints: 0,
-        calculatedScore: 185,
+        ...samplePullKVPowai,
         isDraft: false,
-        publishedAt: '2026-09-29T11:45:00Z'
+        publishedAt: '2026-09-29T11:40:00Z'
       },
-      round3Score: 35,
-      totalScore: 415
-    },
-    'sch_nps_blr': {
-      schoolId: 'sch_nps_blr',
-      round1: {
-        weightTierId: 'push_tier_2',
-        weightCategoryLabel: 'Category 2: Medium Block (500g)',
-        basePoints: 40,
-        quantity: 2,
-        targetZone: 'bullseye',
-        zoneMultiplier: 2.0,
-        timeSeconds: 59,
-        bonusCleanRun: true,
-        bonusSpeedRun: true,
-        bonusPoints: 35,
-        penaltyBoundary: 0,
-        penaltyReset: 0,
-        penaltyPoints: 0,
-        calculatedScore: 195,
-        isDraft: false,
-        publishedAt: '2026-09-29T10:45:00Z'
-      },
-      round2: null,
-      round3Score: 0,
-      totalScore: 195
+      round3Score: 0, // Match 2 loss
+      totalScore: samplePushKVPowai.finalScore + samplePullKVPowai.finalScore // 180 + 155 + 0 = 335
     }
   },
-  robotWarMatches: INITIAL_PRESET_MATCHES,
+  robotWarMatches: [
+    {
+      id: 'match_1',
+      matchNumber: 1,
+      teamAId: 'sch_delhi_public',
+      teamBId: 'sch_mothers_int',
+      result: 'team_a_win',
+      winnerId: 'sch_delhi_public',
+      pitType: 'in_pit',
+      timeLeftSeconds: 40,
+      multiplier: 3,
+      teamAPoints: 120,
+      teamBPoints: 0,
+      status: 'completed',
+      isDraft: false,
+      publishedAt: '2026-09-29T12:15:00Z',
+      matchNotes: 'DPS executed arena push into IN-PIT with 40s remaining (40s × 3 = 120 pts).'
+    },
+    {
+      id: 'match_2',
+      matchNumber: 2,
+      teamAId: 'sch_bombay_scottish',
+      teamBId: 'sch_kv_iit_powai',
+      result: 'team_a_win',
+      winnerId: 'sch_bombay_scottish',
+      pitType: 'in_pit',
+      timeLeftSeconds: 30,
+      multiplier: 3,
+      teamAPoints: 90,
+      teamBPoints: 0,
+      status: 'completed',
+      isDraft: false,
+      publishedAt: '2026-09-29T12:35:00Z',
+      matchNotes: 'Bombay Scottish pushed opponent into IN-PIT with 30s remaining (30s × 3 = 90 pts).'
+    },
+    {
+      id: 'match_3',
+      matchNumber: 3,
+      teamAId: 'sch_nps_blr',
+      teamBId: 'sch_dav_chennai',
+      result: 'pending',
+      timeLeftSeconds: 0,
+      teamAPoints: 0,
+      teamBPoints: 0,
+      status: 'scheduled',
+      isDraft: false,
+      matchNotes: 'Southern Zone Quarter-Final'
+    },
+    {
+      id: 'match_4',
+      matchNumber: 4,
+      teamAId: 'sch_modern_school',
+      teamBId: 'sch_st_xaviers_kol',
+      result: 'pending',
+      timeLeftSeconds: 0,
+      teamAPoints: 0,
+      teamBPoints: 0,
+      status: 'scheduled',
+      isDraft: false,
+      matchNotes: 'Inter-City Quarter-Final'
+    }
+  ],
   auditLogs: [
     {
       id: 'log_01',
-      timestamp: '09:30 AM',
+      timestamp: '10:05 AM',
       round: 1,
-      schoolName: 'Bombay Scottish School',
-      teamName: 'TitanForge 9',
-      action: 'Score published',
-      newScore: 175,
-      operatorNote: 'Flawless run validated by chief referee'
+      schoolName: 'Delhi Public School, R.K. Puram',
+      teamName: 'CyberVanguard',
+      action: 'Score published: 205 (Blocks: 180, Time Bonus: 25s)',
+      newScore: 205
     },
     {
       id: 'log_02',
-      timestamp: '09:48 AM',
-      round: 1,
-      schoolName: 'Kendriya Vidyalaya IIT Powai',
-      teamName: 'Vidyut CyberBots',
-      action: 'Score published',
-      newScore: 195,
-      operatorNote: 'Approved Category 4 push'
+      timestamp: '11:10 AM',
+      round: 2,
+      schoolName: 'Delhi Public School, R.K. Puram',
+      teamName: 'CyberVanguard',
+      action: 'Score published: 195 (Blocks: 170, Time: 30s, Penalty: 1 touch = -5)',
+      newScore: 195
+    },
+    {
+      id: 'log_03',
+      timestamp: '12:15 PM',
+      round: 3,
+      schoolName: 'Delhi Public School vs The Mother\'s International',
+      teamName: 'Match #1',
+      action: 'Robo War published: DPS win via IN-PIT (40s × 3 = 120 pts)',
+      newScore: 120
     }
   ],
   lastUpdated: Date.now()
@@ -267,7 +345,6 @@ const defaultInitialState: CompetitionState = {
 const CompetitionContext = createContext<CompetitionContextType | null>(null);
 
 export const CompetitionProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  // Check URL param ?mode=display or #display for direct launch
   const [isDisplayMode, setIsDisplayMode] = useState<boolean>(() => {
     if (typeof window !== 'undefined') {
       const urlParams = new URLSearchParams(window.location.search);
@@ -294,27 +371,119 @@ export const CompetitionProvider: React.FC<{ children: React.ReactNode }> = ({ c
   });
 
   const [historyStack, setHistoryStack] = useState<CompetitionState[]>([]);
+  const [isFirebaseConnected, setIsFirebaseConnected] = useState<boolean>(false);
+  const [isFirebaseSyncing, setIsFirebaseSyncing] = useState<boolean>(false);
+  const [lastCloudSync, setLastCloudSync] = useState<string | null>(null);
 
-  // Push state update helper with broadcast & localStorage
   const commitState = useCallback((newState: CompetitionState, allowUndo: boolean = true) => {
+    const stateWithTimestamp: CompetitionState = {
+      ...newState,
+      lastUpdated: Date.now()
+    };
+
     if (allowUndo) {
       setHistoryStack(prev => [...prev.slice(-15), state]);
     }
-    setState(newState);
+    setState(stateWithTimestamp);
+
     if (typeof window !== 'undefined') {
       try {
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(newState));
-        // Cross-tab broadcast
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(stateWithTimestamp));
         const channel = new BroadcastChannel(SYNC_CHANNEL_NAME);
-        channel.postMessage({ type: 'BRL_STATE_UPDATE', state: newState });
+        channel.postMessage({ type: 'BRL_STATE_UPDATE', state: stateWithTimestamp });
         channel.close();
       } catch (e) {
         console.error('Broadcast / storage error:', e);
       }
     }
+
+    // Synchronize to Firestore database in real-time
+    setIsFirebaseSyncing(true);
+    saveCompetitionStateToFirestore(stateWithTimestamp)
+      .then(() => {
+        setIsFirebaseConnected(true);
+        setIsFirebaseSyncing(false);
+        setLastCloudSync(new Date().toLocaleTimeString());
+      })
+      .catch((err) => {
+        console.warn('Real-time Firestore sync error:', err);
+        setIsFirebaseSyncing(false);
+      });
   }, [state]);
 
-  // Listen to BroadcastChannel and localStorage events for 0-latency multi-tab sync
+  const forceCloudSync = useCallback(async () => {
+    setIsFirebaseSyncing(true);
+    try {
+      await saveCompetitionStateToFirestore(state);
+      setIsFirebaseConnected(true);
+      setLastCloudSync(new Date().toLocaleTimeString());
+    } finally {
+      setIsFirebaseSyncing(false);
+    }
+  }, [state]);
+
+  // Firebase Auth initialization & real-time Firestore database sync
+  useEffect(() => {
+    let unsubscribe: (() => void) | null = null;
+
+    initFirebaseAuth()
+      .then((user) => {
+        if (user) setIsFirebaseConnected(true);
+        return testConnection();
+      })
+      .then((connected) => {
+        if (connected) setIsFirebaseConnected(true);
+      })
+      .catch((err) => {
+        console.warn('Firebase connection check:', err);
+      });
+
+    // Check if cloud already has existing tournament data, or seed initial tournament state
+    fetchCompetitionStateFromFirestore()
+      .then((cloudData) => {
+        if (cloudData && cloudData.eventName && Array.isArray(cloudData.schools)) {
+          if (!cloudData.lastUpdated || cloudData.lastUpdated > (state.lastUpdated || 0)) {
+            setState(cloudData);
+            setIsFirebaseConnected(true);
+            setLastCloudSync(new Date().toLocaleTimeString());
+          }
+        } else {
+          // Cloud empty: seed with default tournament structure so remote screens populate immediately
+          saveCompetitionStateToFirestore(state).catch(e => console.warn('Initial cloud seed:', e));
+        }
+      })
+      .catch((err) => console.warn('Cloud fetch on start:', err));
+
+    // Listen to real-time updates from Firebase Firestore across all operators and screens
+    unsubscribe = subscribeToCompetitionState(
+      (cloudState) => {
+        setState((currentLocal) => {
+          if (cloudState.lastUpdated && currentLocal.lastUpdated && cloudState.lastUpdated <= currentLocal.lastUpdated) {
+            return currentLocal;
+          }
+          setIsFirebaseConnected(true);
+          setLastCloudSync(new Date().toLocaleTimeString());
+          if (typeof window !== 'undefined') {
+            try {
+              localStorage.setItem(STORAGE_KEY, JSON.stringify(cloudState));
+            } catch (err) {
+              console.warn('Local storage cache failed:', err);
+            }
+          }
+          return cloudState;
+        });
+      },
+      (error) => {
+        console.warn('Firestore subscription status:', error.message);
+      }
+    );
+
+    return () => {
+      if (unsubscribe) unsubscribe();
+    };
+  }, []);
+
+  // Live multi-window synchronization via BroadcastChannel and StorageEvent
   useEffect(() => {
     if (typeof window === 'undefined') return;
 
@@ -344,68 +513,91 @@ export const CompetitionProvider: React.FC<{ children: React.ReactNode }> = ({ c
     };
   }, []);
 
-  // Compute Leaderboard deterministically based on official tie-breaking rules:
-  // 1. Total score (Round 1 + Round 2 + Round 3)
-  // 2. Highest Round 3 score
-  // 3. Highest Round 2 score
-  // 4. Highest Round 1 score
-  // 5. Lowest cumulative penalties
-  const leaderboard = useMemo<LeaderboardRow[]>(() => {
-    const currentQueue = state.runQueue[state.currentRound === 3 ? 1 : state.currentRound];
+  // -------------------------------------------------------------------------
+  // OFFICIAL LEADERBOARD CALCULATION
+  // RULE: DO NOT invent or assume a tie-break rule.
+  // Sort primarily by Total Score. If two or more teams share the same Total Score,
+  // DO NOT arbitrarily split them: they share the exact same rank, are flagged with
+  // isTied: true, and must be visually surfaced for referee/organizer decision!
+  // -------------------------------------------------------------------------
+  const { leaderboard, hasActiveTie, tiedRanks } = useMemo(() => {
+    const roundKey: 1 | 2 = state.currentRound === 3 ? 1 : state.currentRound;
+    const currentQueue = state.runQueue[roundKey];
     const currentPlayingId = currentQueue?.currentSchoolId;
 
-    const rows: LeaderboardRow[] = state.schools
+    // Collect each team's score record
+    const rows = state.schools
       .filter(s => s.isActive)
       .map(school => {
         const scoreRecord = state.scores[school.id];
-        const r1Score = (scoreRecord?.round1 && !scoreRecord.round1.isDraft) ? scoreRecord.round1.calculatedScore : 0;
-        const r2Score = (scoreRecord?.round2 && !scoreRecord.round2.isDraft) ? scoreRecord.round2.calculatedScore : 0;
+        const r1Score = (scoreRecord?.round1 && !scoreRecord.round1.isDraft) ? scoreRecord.round1.finalScore : 0;
+        const r2Score = (scoreRecord?.round2 && !scoreRecord.round2.isDraft) ? scoreRecord.round2.finalScore : 0;
         const r3Score = scoreRecord?.round3Score || 0;
-        
-        const r1Penalties = (scoreRecord?.round1 && !scoreRecord.round1.isDraft) ? scoreRecord.round1.penaltyPoints : 0;
-        const r2Penalties = (scoreRecord?.round2 && !scoreRecord.round2.isDraft) ? scoreRecord.round2.penaltyPoints : 0;
-        const totalPenalties = r1Penalties + r2Penalties;
-
         const total = r1Score + r2Score + r3Score;
+
+        const r2Penalties = (scoreRecord?.round2 && !scoreRecord.round2.isDraft) ? scoreRecord.round2.boundaryPenalty : 0;
         const hasPlayedAny = (r1Score > 0 || r2Score > 0 || r3Score > 0 || !!scoreRecord?.round1 || !!scoreRecord?.round2);
 
         return {
           rank: 0,
+          isTied: false,
+          tiedTeamCount: 1,
           school,
           round1Score: r1Score,
           round2Score: r2Score,
           round3Score: r3Score,
           totalScore: total,
-          totalPenalties,
+          totalPenalties: r2Penalties,
           hasPlayedAny,
           isCurrentPlaying: school.id === currentPlayingId
         };
       });
 
-    // Deterministic sorting with official BRL tie-breaking
+    // Primary sort: Total Score descending.
+    // Secondary: keep order stable alphabetically by school name so identical scores stay grouped.
     rows.sort((a, b) => {
-      // Primary: Total Score descending
       if (b.totalScore !== a.totalScore) return b.totalScore - a.totalScore;
-      // Tie-break 1: Round 3 (Robot War) points descending
-      if (b.round3Score !== a.round3Score) return b.round3Score - a.round3Score;
-      // Tie-break 2: Round 2 (Block Pull) points descending
-      if (b.round2Score !== a.round2Score) return b.round2Score - a.round2Score;
-      // Tie-break 3: Round 1 (Block Push) points descending
-      if (b.round1Score !== a.round1Score) return b.round1Score - a.round1Score;
-      // Tie-break 4: Lowest cumulative penalties ascending
-      if (a.totalPenalties !== b.totalPenalties) return a.totalPenalties - b.totalPenalties;
-      // Tie-break 5: Alphabetical by School Name
       return a.school.name.localeCompare(b.school.name);
     });
 
-    // Assign sequential ranks
-    return rows.map((row, index) => ({
-      ...row,
-      rank: index + 1
-    }));
+    // Assign ranks with explicit TIE detection (Standard Competition Ranking 1224)
+    const tiedRankSet = new Set<number>();
+    let currentRank = 1;
+
+    for (let i = 0; i < rows.length; i++) {
+      if (i > 0 && rows[i].totalScore === rows[i - 1].totalScore) {
+        rows[i].rank = rows[i - 1].rank;
+      } else {
+        rows[i].rank = currentRank;
+      }
+      currentRank++;
+    }
+
+    // Now count occurrences of each rank to flag ties (only if score > 0 or hasPlayedAny to avoid unplayed 0-pt spam)
+    const rankCounts: Record<number, number> = {};
+    rows.forEach(r => {
+      if (r.hasPlayedAny && r.totalScore > 0) {
+        rankCounts[r.rank] = (rankCounts[r.rank] || 0) + 1;
+      }
+    });
+
+    rows.forEach(r => {
+      const count = rankCounts[r.rank] || 1;
+      if (count > 1) {
+        r.isTied = true;
+        r.tiedTeamCount = count;
+        tiedRankSet.add(r.rank);
+      }
+    });
+
+    return {
+      leaderboard: rows,
+      hasActiveTie: tiedRankSet.size > 0,
+      tiedRanks: Array.from(tiedRankSet).sort((a, b) => a - b)
+    };
   }, [state.schools, state.scores, state.currentRound, state.runQueue]);
 
-  // Queue school entities
+  // Active queue entities
   const activeQueue = state.runQueue[state.currentRound === 3 ? 1 : state.currentRound] || {
     currentSchoolId: null,
     queueSchoolIds: [],
@@ -431,13 +623,20 @@ export const CompetitionProvider: React.FC<{ children: React.ReactNode }> = ({ c
   }, [state.robotWarMatches, state.activeRobotWarMatchId]);
 
   const grandWinner = useMemo(() => {
-    if (!state.grandWinnerSchoolId && leaderboard.length > 0) {
-      const topRow = leaderboard[0];
-      return { school: topRow.school, row: topRow };
+    if (leaderboard.length === 0) return null;
+
+    if (state.grandWinnerSchoolId) {
+      const found = leaderboard.find(l => l.school.id === state.grandWinnerSchoolId);
+      if (found) {
+        return { school: found.school, row: found, isTiedWinner: found.isTied && found.rank === 1 };
+      }
     }
-    const found = leaderboard.find(l => l.school.id === state.grandWinnerSchoolId);
-    if (found) return { school: found.school, row: found };
-    return leaderboard[0] ? { school: leaderboard[0].school, row: leaderboard[0] } : null;
+    const topRow = leaderboard[0];
+    return {
+      school: topRow.school,
+      row: topRow,
+      isTiedWinner: topRow.isTied && topRow.rank === 1
+    };
   }, [state.grandWinnerSchoolId, leaderboard]);
 
   // Navigation controls
@@ -485,7 +684,7 @@ export const CompetitionProvider: React.FC<{ children: React.ReactNode }> = ({ c
       round: state.currentRound,
       schoolName: currentSchoolObj?.name || 'Unknown',
       teamName: currentSchoolObj?.teamName || '',
-      action: `Advanced run queue: Next playing is ${nextSchoolObj?.name || 'End of Queue'}`
+      action: `Next Team advanced: Now playing is ${nextSchoolObj?.name || 'End of Queue'}`
     };
 
     commitState({
@@ -539,28 +738,7 @@ export const CompetitionProvider: React.FC<{ children: React.ReactNode }> = ({ c
   }, [state, commitState]);
 
   // Round 1 (Block Push) - Draft vs Publish
-  const saveBlockPushDraft = useCallback((schoolId: string, scoreData: Partial<BlockPushScore>) => {
-    const existing = state.scores[schoolId]?.round1;
-    const draft: BlockPushScore = {
-      weightTierId: scoreData.weightTierId || existing?.weightTierId || OFFICIAL_BLOCK_PUSH_TIERS[0].id,
-      weightCategoryLabel: scoreData.weightCategoryLabel || existing?.weightCategoryLabel || OFFICIAL_BLOCK_PUSH_TIERS[0].name,
-      basePoints: scoreData.basePoints ?? existing?.basePoints ?? OFFICIAL_BLOCK_PUSH_TIERS[0].basePoints,
-      quantity: scoreData.quantity ?? existing?.quantity ?? 1,
-      targetZone: scoreData.targetZone || existing?.targetZone || 'outer',
-      zoneMultiplier: scoreData.zoneMultiplier ?? existing?.zoneMultiplier ?? 1.0,
-      timeSeconds: scoreData.timeSeconds ?? existing?.timeSeconds ?? 60,
-      bonusCleanRun: scoreData.bonusCleanRun ?? existing?.bonusCleanRun ?? false,
-      bonusSpeedRun: scoreData.bonusSpeedRun ?? existing?.bonusSpeedRun ?? false,
-      bonusPoints: scoreData.bonusPoints ?? existing?.bonusPoints ?? 0,
-      penaltyBoundary: scoreData.penaltyBoundary ?? existing?.penaltyBoundary ?? 0,
-      penaltyReset: scoreData.penaltyReset ?? existing?.penaltyReset ?? 0,
-      penaltyPoints: scoreData.penaltyPoints ?? existing?.penaltyPoints ?? 0,
-      calculatedScore: scoreData.calculatedScore ?? existing?.calculatedScore ?? 0,
-      isDraft: true,
-      notes: scoreData.notes ?? existing?.notes ?? ''
-    };
-
-    // Keep draft locally; do not affect public published state
+  const saveBlockPushDraft = useCallback((schoolId: string, scoreData: BlockPushScore) => {
     const teamScore = state.scores[schoolId] || {
       schoolId,
       round1: null,
@@ -575,17 +753,20 @@ export const CompetitionProvider: React.FC<{ children: React.ReactNode }> = ({ c
         ...state.scores,
         [schoolId]: {
           ...teamScore,
-          round1: draft
+          round1: {
+            ...scoreData,
+            isDraft: true
+          }
         }
       },
       lastUpdated: Date.now()
-    }, false); // don't push draft to undo history
+    }, false);
   }, [state, commitState]);
 
   const publishBlockPushScore = useCallback((schoolId: string, scoreData: Omit<BlockPushScore, 'isDraft' | 'publishedAt'>) => {
     const school = state.schools.find(s => s.id === schoolId);
     const existing = state.scores[schoolId];
-    const oldScore = (existing?.round1 && !existing.round1.isDraft) ? existing.round1.calculatedScore : 0;
+    const oldScore = (existing?.round1 && !existing.round1.isDraft) ? existing.round1.finalScore : 0;
     
     const publishedScore: BlockPushScore = {
       ...scoreData,
@@ -593,9 +774,9 @@ export const CompetitionProvider: React.FC<{ children: React.ReactNode }> = ({ c
       publishedAt: new Date().toISOString()
     };
 
-    const r2 = (existing?.round2 && !existing.round2.isDraft) ? existing.round2.calculatedScore : 0;
+    const r2 = (existing?.round2 && !existing.round2.isDraft) ? existing.round2.finalScore : 0;
     const r3 = existing?.round3Score || 0;
-    const newTotal = publishedScore.calculatedScore + r2 + r3;
+    const newTotal = publishedScore.finalScore + r2 + r3;
 
     const log: AuditLogEntry = {
       id: `log_${Date.now()}`,
@@ -603,9 +784,11 @@ export const CompetitionProvider: React.FC<{ children: React.ReactNode }> = ({ c
       round: 1,
       schoolName: school?.name || 'Unknown',
       teamName: school?.teamName || '',
-      action: oldScore > 0 ? `Score corrected: ${oldScore} → ${publishedScore.calculatedScore}` : `Score published: ${publishedScore.calculatedScore}`,
+      action: oldScore > 0 
+        ? `Block Push score corrected: ${oldScore} → ${publishedScore.finalScore}`
+        : `Block Push score published: ${publishedScore.finalScore} (Blocks: ${publishedScore.blockScore}, Time Bonus: ${publishedScore.timeBonus})`,
       oldScore: oldScore > 0 ? oldScore : undefined,
-      newScore: publishedScore.calculatedScore,
+      newScore: publishedScore.finalScore,
       operatorNote: publishedScore.notes
     };
 
@@ -627,26 +810,7 @@ export const CompetitionProvider: React.FC<{ children: React.ReactNode }> = ({ c
   }, [state, commitState]);
 
   // Round 2 (Block Pull) - Draft vs Publish
-  const saveBlockPullDraft = useCallback((schoolId: string, scoreData: Partial<BlockPullScore>) => {
-    const existing = state.scores[schoolId]?.round2;
-    const draft: BlockPullScore = {
-      pullTierId: scoreData.pullTierId || existing?.pullTierId || OFFICIAL_BLOCK_PULL_TIERS[0].id,
-      pullTierLabel: scoreData.pullTierLabel || existing?.pullTierLabel || OFFICIAL_BLOCK_PULL_TIERS[0].name,
-      basePoints: scoreData.basePoints ?? existing?.basePoints ?? OFFICIAL_BLOCK_PULL_TIERS[0].basePoints,
-      distanceAchieved: scoreData.distanceAchieved || existing?.distanceAchieved || 'full',
-      distanceMultiplier: scoreData.distanceMultiplier ?? existing?.distanceMultiplier ?? 1.0,
-      timeSeconds: scoreData.timeSeconds ?? existing?.timeSeconds ?? 50,
-      bonusSpeed: scoreData.bonusSpeed ?? existing?.bonusSpeed ?? false,
-      bonusZeroSlip: scoreData.bonusZeroSlip ?? existing?.bonusZeroSlip ?? false,
-      bonusPoints: scoreData.bonusPoints ?? existing?.bonusPoints ?? 0,
-      penaltyLineFoul: scoreData.penaltyLineFoul ?? existing?.penaltyLineFoul ?? 0,
-      penaltyDisconnect: scoreData.penaltyDisconnect ?? existing?.penaltyDisconnect ?? 0,
-      penaltyPoints: scoreData.penaltyPoints ?? existing?.penaltyPoints ?? 0,
-      calculatedScore: scoreData.calculatedScore ?? existing?.calculatedScore ?? 0,
-      isDraft: true,
-      notes: scoreData.notes ?? existing?.notes ?? ''
-    };
-
+  const saveBlockPullDraft = useCallback((schoolId: string, scoreData: BlockPullScore) => {
     const teamScore = state.scores[schoolId] || {
       schoolId,
       round1: null,
@@ -661,7 +825,10 @@ export const CompetitionProvider: React.FC<{ children: React.ReactNode }> = ({ c
         ...state.scores,
         [schoolId]: {
           ...teamScore,
-          round2: draft
+          round2: {
+            ...scoreData,
+            isDraft: true
+          }
         }
       },
       lastUpdated: Date.now()
@@ -671,7 +838,7 @@ export const CompetitionProvider: React.FC<{ children: React.ReactNode }> = ({ c
   const publishBlockPullScore = useCallback((schoolId: string, scoreData: Omit<BlockPullScore, 'isDraft' | 'publishedAt'>) => {
     const school = state.schools.find(s => s.id === schoolId);
     const existing = state.scores[schoolId];
-    const oldScore = (existing?.round2 && !existing.round2.isDraft) ? existing.round2.calculatedScore : 0;
+    const oldScore = (existing?.round2 && !existing.round2.isDraft) ? existing.round2.finalScore : 0;
     
     const publishedScore: BlockPullScore = {
       ...scoreData,
@@ -679,9 +846,9 @@ export const CompetitionProvider: React.FC<{ children: React.ReactNode }> = ({ c
       publishedAt: new Date().toISOString()
     };
 
-    const r1 = (existing?.round1 && !existing.round1.isDraft) ? existing.round1.calculatedScore : 0;
+    const r1 = (existing?.round1 && !existing.round1.isDraft) ? existing.round1.finalScore : 0;
     const r3 = existing?.round3Score || 0;
-    const newTotal = r1 + publishedScore.calculatedScore + r3;
+    const newTotal = r1 + publishedScore.finalScore + r3;
 
     const log: AuditLogEntry = {
       id: `log_${Date.now()}`,
@@ -689,9 +856,11 @@ export const CompetitionProvider: React.FC<{ children: React.ReactNode }> = ({ c
       round: 2,
       schoolName: school?.name || 'Unknown',
       teamName: school?.teamName || '',
-      action: oldScore > 0 ? `Score corrected: ${oldScore} → ${publishedScore.calculatedScore}` : `Score published: ${publishedScore.calculatedScore}`,
+      action: oldScore > 0 
+        ? `Block Pull score corrected: ${oldScore} → ${publishedScore.finalScore}` 
+        : `Block Pull score published: ${publishedScore.finalScore} (Blocks: ${publishedScore.blockScore}, Bonus: ${publishedScore.timeBonus}, Penalty: ${publishedScore.boundaryPenalty})`,
       oldScore: oldScore > 0 ? oldScore : undefined,
-      newScore: publishedScore.calculatedScore,
+      newScore: publishedScore.finalScore,
       operatorNote: publishedScore.notes
     };
 
@@ -712,7 +881,7 @@ export const CompetitionProvider: React.FC<{ children: React.ReactNode }> = ({ c
     });
   }, [state, commitState]);
 
-  // Round 3 (Robot War)
+  // Round 3 (Robo War)
   const createRobotWarMatch = useCallback((teamAId: string, teamBId: string, matchNotes?: string): string => {
     const newId = `match_${Date.now()}`;
     const newMatch: RobotWarMatch = {
@@ -721,6 +890,7 @@ export const CompetitionProvider: React.FC<{ children: React.ReactNode }> = ({ c
       teamAId,
       teamBId,
       result: 'pending',
+      timeLeftSeconds: 0,
       teamAPoints: 0,
       teamBPoints: 0,
       status: 'scheduled',
@@ -745,44 +915,26 @@ export const CompetitionProvider: React.FC<{ children: React.ReactNode }> = ({ c
     });
   }, [state, commitState]);
 
-  const saveRobotWarDraft = useCallback((matchId: string, result: RobotWarMatch['result'], winType?: RobotWarMatch['winType'], notes?: string) => {
-    let teamAPts = 0;
-    let teamBPts = 0;
-    if (result === 'team_a_win') {
-      if (winType === 'knockout') {
-        teamAPts = OFFICIAL_ROBOT_WAR_RULES.knockout.winnerPoints;
-        teamBPts = OFFICIAL_ROBOT_WAR_RULES.knockout.loserPoints;
-      } else if (winType === 'disqualification') {
-        teamAPts = OFFICIAL_ROBOT_WAR_RULES.disqualification.winnerPoints;
-        teamBPts = OFFICIAL_ROBOT_WAR_RULES.disqualification.loserPoints;
-      } else {
-        teamAPts = OFFICIAL_ROBOT_WAR_RULES.judgesDecision.winnerPoints;
-        teamBPts = OFFICIAL_ROBOT_WAR_RULES.judgesDecision.loserPoints;
-      }
-    } else if (result === 'team_b_win') {
-      if (winType === 'knockout') {
-        teamBPts = OFFICIAL_ROBOT_WAR_RULES.knockout.winnerPoints;
-        teamAPts = OFFICIAL_ROBOT_WAR_RULES.knockout.loserPoints;
-      } else if (winType === 'disqualification') {
-        teamBPts = OFFICIAL_ROBOT_WAR_RULES.disqualification.winnerPoints;
-        teamAPts = OFFICIAL_ROBOT_WAR_RULES.disqualification.loserPoints;
-      } else {
-        teamBPts = OFFICIAL_ROBOT_WAR_RULES.judgesDecision.winnerPoints;
-        teamAPts = OFFICIAL_ROBOT_WAR_RULES.judgesDecision.loserPoints;
-      }
-    } else if (result === 'draw') {
-      teamAPts = OFFICIAL_ROBOT_WAR_RULES.draw.teamAPoints;
-      teamBPts = OFFICIAL_ROBOT_WAR_RULES.draw.teamBPoints;
-    }
+  const saveRobotWarDraft = useCallback((
+    matchId: string, 
+    winner: 'team_a' | 'team_b', 
+    pitType: PitType, 
+    timeLeftSeconds: number, 
+    notes?: string
+  ) => {
+    const calculated = calculateRoboWarScore(winner, pitType, timeLeftSeconds);
 
     const updatedMatches = state.robotWarMatches.map(m => {
       if (m.id === matchId) {
         return {
           ...m,
-          result,
-          winType,
-          teamAPoints: teamAPts,
-          teamBPoints: teamBPts,
+          result: winner === 'team_a' ? ('team_a_win' as const) : ('team_b_win' as const),
+          winnerId: winner === 'team_a' ? m.teamAId : m.teamBId,
+          pitType,
+          timeLeftSeconds: calculated.timeLeftSeconds,
+          multiplier: calculated.multiplier,
+          teamAPoints: calculated.teamAPoints,
+          teamBPoints: calculated.teamBPoints,
           matchNotes: notes ?? m.matchNotes,
           isDraft: true
         };
@@ -799,54 +951,33 @@ export const CompetitionProvider: React.FC<{ children: React.ReactNode }> = ({ c
 
   const publishRobotWarResult = useCallback((
     matchId: string, 
-    result: 'team_a_win' | 'team_b_win' | 'draw', 
-    winType: RobotWarMatch['winType'] = 'knockout', 
+    winner: 'team_a' | 'team_b', 
+    pitType: PitType, 
+    timeLeftSeconds: number, 
     notes?: string
   ) => {
-    let teamAPts = 0;
-    let teamBPts = 0;
-
-    if (result === 'team_a_win') {
-      if (winType === 'knockout') {
-        teamAPts = OFFICIAL_ROBOT_WAR_RULES.knockout.winnerPoints;
-        teamBPts = OFFICIAL_ROBOT_WAR_RULES.knockout.loserPoints;
-      } else if (winType === 'disqualification') {
-        teamAPts = OFFICIAL_ROBOT_WAR_RULES.disqualification.winnerPoints;
-        teamBPts = OFFICIAL_ROBOT_WAR_RULES.disqualification.loserPoints;
-      } else {
-        teamAPts = OFFICIAL_ROBOT_WAR_RULES.judgesDecision.winnerPoints;
-        teamBPts = OFFICIAL_ROBOT_WAR_RULES.judgesDecision.loserPoints;
-      }
-    } else if (result === 'team_b_win') {
-      if (winType === 'knockout') {
-        teamBPts = OFFICIAL_ROBOT_WAR_RULES.knockout.winnerPoints;
-        teamAPts = OFFICIAL_ROBOT_WAR_RULES.knockout.loserPoints;
-      } else if (winType === 'disqualification') {
-        teamBPts = OFFICIAL_ROBOT_WAR_RULES.disqualification.winnerPoints;
-        teamAPts = OFFICIAL_ROBOT_WAR_RULES.disqualification.loserPoints;
-      } else {
-        teamBPts = OFFICIAL_ROBOT_WAR_RULES.judgesDecision.winnerPoints;
-        teamAPts = OFFICIAL_ROBOT_WAR_RULES.judgesDecision.loserPoints;
-      }
-    } else if (result === 'draw') {
-      teamAPts = OFFICIAL_ROBOT_WAR_RULES.draw.teamAPoints;
-      teamBPts = OFFICIAL_ROBOT_WAR_RULES.draw.teamBPoints;
-    }
-
     const match = state.robotWarMatches.find(m => m.id === matchId);
     if (!match) return;
 
+    const calculated = calculateRoboWarScore(winner, pitType, timeLeftSeconds);
+    const winnerSchoolId = winner === 'team_a' ? match.teamAId : match.teamBId;
+    const loserSchoolId = winner === 'team_a' ? match.teamBId : match.teamAId;
+
     const teamASchool = state.schools.find(s => s.id === match.teamAId);
     const teamBSchool = state.schools.find(s => s.id === match.teamBId);
+    const winnerSchool = state.schools.find(s => s.id === winnerSchoolId);
 
     const updatedMatches = state.robotWarMatches.map(m => {
       if (m.id === matchId) {
         return {
           ...m,
-          result,
-          winType,
-          teamAPoints: teamAPts,
-          teamBPoints: teamBPts,
+          result: winner === 'team_a' ? ('team_a_win' as const) : ('team_b_win' as const),
+          winnerId: winnerSchoolId,
+          pitType,
+          timeLeftSeconds: calculated.timeLeftSeconds,
+          multiplier: calculated.multiplier,
+          teamAPoints: calculated.teamAPoints,
+          teamBPoints: calculated.teamBPoints,
           status: 'completed' as const,
           isDraft: false,
           publishedAt: new Date().toISOString(),
@@ -856,55 +987,51 @@ export const CompetitionProvider: React.FC<{ children: React.ReactNode }> = ({ c
       return m;
     });
 
-    // Update Round 3 accumulated points for both teams
+    // Update Round 3 scores for both teams (Winner gets points, Loser gets 0)
     const updatedScores = { ...state.scores };
 
-    // Team A
-    const currentScoreA = updatedScores[match.teamAId] || {
-      schoolId: match.teamAId,
+    // Winner team update
+    const currentScoreW = updatedScores[winnerSchoolId] || {
+      schoolId: winnerSchoolId,
       round1: null,
       round2: null,
       round3Score: 0,
       totalScore: 0
     };
-    const r1A = (currentScoreA.round1 && !currentScoreA.round1.isDraft) ? currentScoreA.round1.calculatedScore : 0;
-    const r2A = (currentScoreA.round2 && !currentScoreA.round2.isDraft) ? currentScoreA.round2.calculatedScore : 0;
-    updatedScores[match.teamAId] = {
-      ...currentScoreA,
-      round3Score: teamAPts,
-      totalScore: r1A + r2A + teamAPts
+    const r1W = (currentScoreW.round1 && !currentScoreW.round1.isDraft) ? currentScoreW.round1.finalScore : 0;
+    const r2W = (currentScoreW.round2 && !currentScoreW.round2.isDraft) ? currentScoreW.round2.finalScore : 0;
+    updatedScores[winnerSchoolId] = {
+      ...currentScoreW,
+      round3Score: calculated.winnerPoints,
+      totalScore: r1W + r2W + calculated.winnerPoints
     };
 
-    // Team B
-    const currentScoreB = updatedScores[match.teamBId] || {
-      schoolId: match.teamBId,
+    // Loser team update
+    const currentScoreL = updatedScores[loserSchoolId] || {
+      schoolId: loserSchoolId,
       round1: null,
       round2: null,
       round3Score: 0,
       totalScore: 0
     };
-    const r1B = (currentScoreB.round1 && !currentScoreB.round1.isDraft) ? currentScoreB.round1.calculatedScore : 0;
-    const r2B = (currentScoreB.round2 && !currentScoreB.round2.isDraft) ? currentScoreB.round2.calculatedScore : 0;
-    updatedScores[match.teamBId] = {
-      ...currentScoreB,
-      round3Score: teamBPts,
-      totalScore: r1B + r2B + teamBPts
+    const r1L = (currentScoreL.round1 && !currentScoreL.round1.isDraft) ? currentScoreL.round1.finalScore : 0;
+    const r2L = (currentScoreL.round2 && !currentScoreL.round2.isDraft) ? currentScoreL.round2.finalScore : 0;
+    updatedScores[loserSchoolId] = {
+      ...currentScoreL,
+      round3Score: 0,
+      totalScore: r1L + r2L
     };
 
-    const winnerName = result === 'team_a_win' 
-      ? teamASchool?.name 
-      : result === 'team_b_win' 
-        ? teamBSchool?.name 
-        : 'Draw Match';
-
+    const pitLabel = pitType === 'in_pit' ? 'IN-PIT (×3)' : 'OUT-PIT (×2)';
     const log: AuditLogEntry = {
       id: `log_${Date.now()}`,
       timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
       round: 3,
       schoolName: `${teamASchool?.name || 'A'} vs ${teamBSchool?.name || 'B'}`,
       teamName: `Match #${match.matchNumber}`,
-      action: `Robot War Result: ${winnerName} (${teamAPts} - ${teamBPts})`,
-      newScore: teamAPts
+      action: `Robo War: ${winnerSchool?.name} won via ${pitLabel} (${calculated.timeLeftSeconds}s left = ${calculated.winnerPoints} pts)`,
+      newScore: calculated.winnerPoints,
+      operatorNote: notes
     };
 
     commitState({
@@ -924,7 +1051,6 @@ export const CompetitionProvider: React.FC<{ children: React.ReactNode }> = ({ c
       id: newId
     };
 
-    // Also add to queues
     commitState({
       ...state,
       schools: [...state.schools, newSchool],
@@ -977,23 +1103,10 @@ export const CompetitionProvider: React.FC<{ children: React.ReactNode }> = ({ c
 
   const loadDemoSchools = useCallback(() => {
     commitState({
-      ...state,
-      schools: INITIAL_DEMO_SCHOOLS,
-      runQueue: {
-        1: {
-          currentSchoolId: INITIAL_DEMO_SCHOOLS[0].id,
-          queueSchoolIds: INITIAL_DEMO_SCHOOLS.slice(1).map(s => s.id),
-          completedSchoolIds: []
-        },
-        2: {
-          currentSchoolId: INITIAL_DEMO_SCHOOLS[0].id,
-          queueSchoolIds: INITIAL_DEMO_SCHOOLS.slice(1).map(s => s.id),
-          completedSchoolIds: []
-        }
-      },
+      ...defaultInitialState,
       lastUpdated: Date.now()
     });
-  }, [state, commitState]);
+  }, [commitState]);
 
   const clearAllSchools = useCallback(() => {
     commitState({
@@ -1052,64 +1165,53 @@ export const CompetitionProvider: React.FC<{ children: React.ReactNode }> = ({ c
     const updatedScores = { ...state.scores };
 
     if (round === 1) {
-      oldScore = existing.round1?.calculatedScore || 0;
+      oldScore = existing.round1?.finalScore || 0;
       updatedScores[schoolId] = {
         ...existing,
         round1: {
-          ...(existing.round1 || {
-            weightTierId: OFFICIAL_BLOCK_PUSH_TIERS[0].id,
-            weightCategoryLabel: 'Manual Correction',
-            basePoints: newScore,
-            quantity: 1,
-            targetZone: 'outer',
-            zoneMultiplier: 1.0,
-            bonusCleanRun: false,
-            bonusSpeedRun: false,
-            bonusPoints: 0,
-            penaltyBoundary: 0,
-            penaltyReset: 0,
-            penaltyPoints: 0,
-            notes: ''
-          }),
+          blocks: OFFICIAL_BLOCK_WEIGHTS.map(w => ({
+            weightId: w.id,
+            weightLabel: w.label,
+            status: 'none',
+            pointsEarned: 0
+          })),
+          blockScore: newScore,
+          timeLeftSeconds: 0,
+          timeBonus: 0,
+          finalScore: newScore,
           calculatedScore: newScore,
           isDraft: false,
           publishedAt: new Date().toISOString(),
           notes: `[Manual Correction] ${reason}`
         },
-        totalScore: newScore + (existing.round2?.calculatedScore || 0) + existing.round3Score
+        totalScore: newScore + (existing.round2?.finalScore || 0) + existing.round3Score
       };
     } else if (round === 2) {
-      oldScore = existing.round2?.calculatedScore || 0;
+      oldScore = existing.round2?.finalScore || 0;
       updatedScores[schoolId] = {
         ...existing,
         round2: {
-          ...(existing.round2 || {
-            pullTierId: OFFICIAL_BLOCK_PULL_TIERS[0].id,
-            pullTierLabel: 'Manual Correction',
-            basePoints: newScore,
-            distanceAchieved: 'full',
-            distanceMultiplier: 1.0,
-            bonusSpeed: false,
-            bonusZeroSlip: false,
-            bonusPoints: 0,
-            penaltyLineFoul: 0,
-            penaltyDisconnect: 0,
-            penaltyPoints: 0,
-            notes: ''
-          }),
+          pulledBlockIds: [],
+          blockScore: newScore,
+          timeLeftSeconds: 0,
+          timeBonus: 0,
+          boundaryTouches: 0,
+          boundaryPenalty: 0,
+          penaltyPoints: 0,
+          finalScore: newScore,
           calculatedScore: newScore,
           isDraft: false,
           publishedAt: new Date().toISOString(),
           notes: `[Manual Correction] ${reason}`
         },
-        totalScore: (existing.round1?.calculatedScore || 0) + newScore + existing.round3Score
+        totalScore: (existing.round1?.finalScore || 0) + newScore + existing.round3Score
       };
     } else if (round === 3) {
       oldScore = existing.round3Score || 0;
       updatedScores[schoolId] = {
         ...existing,
         round3Score: newScore,
-        totalScore: (existing.round1?.calculatedScore || 0) + (existing.round2?.calculatedScore || 0) + newScore
+        totalScore: (existing.round1?.finalScore || 0) + (existing.round2?.finalScore || 0) + newScore
       };
     }
 
@@ -1136,9 +1238,6 @@ export const CompetitionProvider: React.FC<{ children: React.ReactNode }> = ({ c
   const resetAllCompetitionData = useCallback(() => {
     commitState({
       ...defaultInitialState,
-      schools: INITIAL_DEMO_SCHOOLS,
-      scores: {},
-      robotWarMatches: INITIAL_PRESET_MATCHES,
       auditLogs: [{
         id: `log_${Date.now()}`,
         timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
@@ -1147,6 +1246,31 @@ export const CompetitionProvider: React.FC<{ children: React.ReactNode }> = ({ c
         teamName: 'Master Reset',
         action: 'Competition reset performed by operator'
       }],
+      lastUpdated: Date.now()
+    });
+  }, [commitState]);
+
+  const resetAllScores = useCallback(() => {
+    commitState({
+      ...state,
+      scores: {},
+      robotWarMatches: state.robotWarMatches.map(m => ({
+        ...m,
+        result: 'pending',
+        winnerId: undefined,
+        timeLeftSeconds: 0,
+        teamAPoints: 0,
+        teamBPoints: 0,
+        status: 'scheduled'
+      })),
+      grandWinnerSchoolId: null,
+      lastUpdated: Date.now()
+    });
+  }, [state, commitState]);
+
+  const importState = useCallback((newState: CompetitionState) => {
+    commitState({
+      ...newState,
       lastUpdated: Date.now()
     });
   }, [commitState]);
@@ -1169,6 +1293,8 @@ export const CompetitionProvider: React.FC<{ children: React.ReactNode }> = ({ c
       value={{
         state,
         leaderboard,
+        hasActiveTie,
+        tiedRanks,
         currentSchool,
         upNextSchool,
         followingSchool,
@@ -1198,10 +1324,16 @@ export const CompetitionProvider: React.FC<{ children: React.ReactNode }> = ({ c
         exitWinnerMode,
         correctScoreManually,
         resetAllCompetitionData,
+        resetAllScores,
+        importState,
         undoLastAction,
         canUndo: historyStack.length > 0,
         isDisplayMode,
-        setIsDisplayMode
+        setIsDisplayMode,
+        isFirebaseConnected,
+        isFirebaseSyncing,
+        lastCloudSync,
+        forceCloudSync
       }}
     >
       {children}

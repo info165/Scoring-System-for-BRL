@@ -20,47 +20,48 @@ export interface School {
   isActive: boolean;
 }
 
+// --- ROUND 1: BLOCK PUSH CHALLENGE ---
+export type PushBlockStatus = 'none' | 'complete' | 'incomplete';
+
+export interface BlockPushBlockEntry {
+  weightId: string; // '200g' | '500g' | '700g' | '1kg' | '2kg' | '4kg'
+  weightLabel: string;
+  status: PushBlockStatus; // complete (100%), incomplete (50%), none (0%)
+  pointsEarned: number;
+}
+
 export interface BlockPushScore {
-  weightTierId: string;
-  weightCategoryLabel: string;
-  basePoints: number;
-  quantity: number;
-  targetZone: 'outer' | 'middle' | 'bullseye';
-  zoneMultiplier: number;
-  timeSeconds?: number;
-  bonusCleanRun: boolean;
-  bonusSpeedRun: boolean;
-  bonusPoints: number;
-  penaltyBoundary: number;
-  penaltyReset: number;
-  penaltyPoints: number;
-  calculatedScore: number;
+  blocks: BlockPushBlockEntry[];
+  blockScore: number;
+  timeLeftSeconds: number; // 0 to 120s
+  timeBonus: number; // 1 pt per unused sec
+  finalScore: number; // blockScore + timeBonus
+  calculatedScore: number; // backwards compatibility alias for finalScore
+  penaltyPoints?: number; // 0 in official push rules
   isDraft: boolean;
   publishedAt?: string;
   notes?: string;
 }
 
+// --- ROUND 2: BLOCK PULL CHALLENGE ---
 export interface BlockPullScore {
-  pullTierId: string;
-  pullTierLabel: string;
-  basePoints: number;
-  distanceAchieved: 'full' | 'three_quarters' | 'half' | 'quarter';
-  distanceMultiplier: number;
-  timeSeconds?: number;
-  bonusSpeed: boolean;
-  bonusZeroSlip: boolean;
-  bonusPoints: number;
-  penaltyLineFoul: number;
-  penaltyDisconnect: number;
-  penaltyPoints: number;
-  calculatedScore: number;
+  pulledBlockIds: string[]; // IDs of weights successfully pulled
+  blockScore: number; // sum of pulled block weights
+  timeLeftSeconds: number; // 0 to 120s
+  timeBonus: number; // 1 pt per unused sec
+  boundaryTouches: number; // count >= 0
+  boundaryPenalty: number; // boundaryTouches * 5
+  finalScore: number; // Math.max(0, blockScore + timeBonus - boundaryPenalty)
+  calculatedScore: number; // backwards compatibility alias
+  penaltyPoints: number; // alias for boundaryPenalty
   isDraft: boolean;
   publishedAt?: string;
   notes?: string;
 }
 
+// --- ROUND 3: ROBO WAR ---
+export type PitType = 'in_pit' | 'out_pit';
 export type WarResult = 'team_a_win' | 'team_b_win' | 'draw' | 'pending';
-export type WarWinType = 'knockout' | 'judges_decision' | 'draw' | 'disqualification';
 
 export interface RobotWarMatch {
   id: string;
@@ -68,7 +69,10 @@ export interface RobotWarMatch {
   teamAId: string;
   teamBId: string;
   result: WarResult;
-  winType?: WarWinType;
+  winnerId?: string;
+  pitType?: PitType;
+  timeLeftSeconds: number; // 0 to 90s
+  multiplier?: number; // 3 for in-pit, 2 for out-pit
   teamAPoints: number;
   teamBPoints: number;
   matchNotes?: string;
@@ -101,6 +105,7 @@ export interface AuditLogEntry {
   oldScore?: number;
   newScore?: number;
   operatorNote?: string;
+  details?: Record<string, any>;
 }
 
 export interface CompetitionState {

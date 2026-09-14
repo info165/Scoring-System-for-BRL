@@ -8,7 +8,10 @@ import {
   Trophy, 
   SkipForward, 
   RotateCcw, 
-  ShieldCheck
+  ShieldCheck,
+  Cloud,
+  CloudOff,
+  RefreshCw
 } from 'lucide-react';
 import { useCompetition } from '../../context/CompetitionContext';
 
@@ -27,7 +30,11 @@ export const Header: React.FC<HeaderProps> = ({ activeTab, setActiveTab }) => {
     undoLastAction,
     canUndo,
     isDisplayMode,
-    setIsDisplayMode
+    setIsDisplayMode,
+    isFirebaseConnected,
+    isFirebaseSyncing,
+    lastCloudSync,
+    forceCloudSync
   } = useCompetition();
 
   const openDisplayInNewTab = () => {
@@ -139,6 +146,31 @@ export const Header: React.FC<HeaderProps> = ({ activeTab, setActiveTab }) => {
 
           {/* View Mode Switching & Launch Public Display Window */}
           <div className="flex items-center space-x-2">
+            {/* Real-time Firebase Cloud Sync Badge */}
+            <div className="hidden md:flex items-center space-x-1.5 px-2.5 py-1 bg-slate-900/90 border border-slate-700/70 rounded-lg text-xs">
+              {isFirebaseSyncing ? (
+                <RefreshCw className="w-3.5 h-3.5 text-amber-400 animate-spin" />
+              ) : isFirebaseConnected ? (
+                <div className="flex items-center space-x-1">
+                  <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+                  <Cloud className="w-3.5 h-3.5 text-emerald-400" />
+                </div>
+              ) : (
+                <CloudOff className="w-3.5 h-3.5 text-slate-400" />
+              )}
+              <span className={`font-mono text-[11px] font-semibold ${isFirebaseConnected ? 'text-emerald-300' : 'text-slate-400'}`}>
+                {isFirebaseSyncing ? 'Syncing...' : isFirebaseConnected ? 'Cloud Realtime' : 'Connecting...'}
+              </span>
+              <button
+                onClick={() => forceCloudSync()}
+                disabled={isFirebaseSyncing}
+                title={`Last synced: ${lastCloudSync || 'Active'}. Click to push full sync`}
+                className="p-0.5 text-slate-400 hover:text-emerald-300 transition rounded"
+              >
+                <RefreshCw className="w-2.5 h-2.5" />
+              </button>
+            </div>
+
             <button
               onClick={openDisplayInNewTab}
               title="Launch Public Display in a new separate window (ideal for HDMI projector/LED wall)"

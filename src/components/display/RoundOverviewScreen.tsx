@@ -1,14 +1,15 @@
 import React from 'react';
-import { Layers, Anchor, Swords, CheckCircle, Trophy, Clock } from 'lucide-react';
+import { Layers, Swords, ShieldAlert, Clock, Trophy, Flame } from 'lucide-react';
 import { useCompetition } from '../../context/CompetitionContext';
 import { 
-  OFFICIAL_BLOCK_PUSH_TIERS, 
-  OFFICIAL_BLOCK_PULL_TIERS, 
-  OFFICIAL_ROBOT_WAR_RULES 
+  OFFICIAL_BLOCK_WEIGHTS, 
+  BLOCK_PUSH_CONFIG, 
+  BLOCK_PULL_CONFIG, 
+  ROBO_WAR_CONFIG 
 } from '../../data/officialRules';
 
 export const RoundOverviewScreen: React.FC = () => {
-  const { state, leaderboard } = useCompetition();
+  const { state } = useCompetition();
   const currentRound = state.currentRound;
 
   return (
@@ -34,8 +35,9 @@ export const RoundOverviewScreen: React.FC = () => {
 
         <div className="flex items-center space-x-3">
           <span className="px-3.5 py-1.5 rounded-full bg-amber-500/20 border border-amber-500/40 text-amber-300 text-xs font-bold uppercase tracking-wider">
-            ACTIVE STAGE: ROUND {currentRound}
+            STAGE: ROUND {currentRound}
           </span>
+          <span className="text-xs font-mono text-slate-400">29 SEPT 2026</span>
         </div>
       </header>
 
@@ -44,44 +46,55 @@ export const RoundOverviewScreen: React.FC = () => {
         {currentRound === 1 && (
           <div className="space-y-8">
             <div className="text-center space-y-2">
-              <span className="text-cyan-400 font-mono text-sm font-bold tracking-widest uppercase">
-                STAGE ONE
+              <span className="text-blue-400 font-mono text-sm font-bold tracking-widest uppercase">
+                EVENT 1 • BLUE THEME
               </span>
               <h2 className="text-4xl sm:text-6xl font-display font-black text-white">
                 BLOCK PUSH CHALLENGE
               </h2>
               <p className="text-slate-300 text-base sm:text-lg max-w-2xl mx-auto">
-                Robots must maneuver and deposit designated mass categories into scored target zones under time limits.
+                Push blocks across the arena floor into the designated scoring box within 120 seconds.
               </p>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
-              {OFFICIAL_BLOCK_PUSH_TIERS.map((tier) => (
-                <div key={tier.id} className="bg-slate-900/80 border border-slate-800 rounded-2xl p-6">
-                  <div className="flex items-center justify-between text-cyan-400 font-mono text-xs font-bold mb-2">
-                    <span>{tier.weightRange}</span>
-                    <span className="px-2 py-0.5 rounded bg-cyan-500/20 text-cyan-200">
-                      {tier.basePoints} PTS
-                    </span>
+            {/* 6 Block Weights Grid */}
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+              {OFFICIAL_BLOCK_WEIGHTS.map((weight) => (
+                <div key={weight.id} className="bg-slate-900/80 border border-blue-500/30 rounded-2xl p-4 text-center">
+                  <div className="text-2xl font-display font-black text-white mb-1">
+                    {weight.label}
                   </div>
-                  <h3 className="text-lg font-bold text-white mb-2">{tier.name}</h3>
-                  <p className="text-xs text-slate-400 leading-relaxed">{tier.description}</p>
+                  <div className="text-xs text-blue-400 font-bold font-mono">
+                    100%: +{weight.fullPoints} pts
+                  </div>
+                  <div className="text-[11px] text-indigo-300 font-mono mt-0.5">
+                    50%: +{weight.incompletePoints} pts
+                  </div>
                 </div>
               ))}
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 bg-slate-900/60 border border-slate-800 rounded-2xl p-5 text-xs text-slate-300">
-              <div>
-                <span className="font-bold text-emerald-400 uppercase tracking-wider block mb-1">
-                  Target Zone Multipliers:
+            {/* Official Scoring Rules Breakdown */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-xs text-slate-300">
+              <div className="bg-slate-900/60 border border-slate-800 rounded-2xl p-5">
+                <span className="font-bold text-blue-400 uppercase tracking-wider block mb-1">
+                  Complete Placement (100%):
                 </span>
-                <p>Outer Ring (1.0x) • Intermediate Ring (1.5x) • Central Bullseye (2.0x)</p>
+                <p>If block is completely inside the designated box, full points are awarded for that weight.</p>
               </div>
-              <div>
-                <span className="font-bold text-amber-400 uppercase tracking-wider block mb-1">
-                  Autonomous & Speed Bonuses:
+
+              <div className="bg-slate-900/60 border border-slate-800 rounded-2xl p-5">
+                <span className="font-bold text-indigo-400 uppercase tracking-wider block mb-1">
+                  Incomplete Placement (50%):
                 </span>
-                <p>Clean Autonomous Navigation (+20 pts) • Sub-60s Completion (+15 pts)</p>
+                <p>If any portion of the block remains outside the designated box, 50% of points are awarded.</p>
+              </div>
+
+              <div className="bg-slate-900/60 border border-slate-800 rounded-2xl p-5">
+                <span className="font-bold text-emerald-400 uppercase tracking-wider block mb-1">
+                  Time Bonus:
+                </span>
+                <p>Total time 120s. Unused seconds award 1 bonus point per second (Time Bonus = Time Left).</p>
               </div>
             </div>
           </div>
@@ -90,43 +103,55 @@ export const RoundOverviewScreen: React.FC = () => {
         {currentRound === 2 && (
           <div className="space-y-8">
             <div className="text-center space-y-2">
-              <span className="text-amber-400 font-mono text-sm font-bold tracking-widest uppercase">
-                STAGE TWO
+              <span className="text-emerald-400 font-mono text-sm font-bold tracking-widest uppercase">
+                EVENT 2 • GREEN THEME
               </span>
               <h2 className="text-4xl sm:text-6xl font-display font-black text-white">
                 BLOCK PULL CHALLENGE
               </h2>
               <p className="text-slate-300 text-base sm:text-lg max-w-2xl mx-auto">
-                High-torque friction drag competition across arena tracks with tiered sled loads.
+                Two-member team: Member 1 hooks block, Member 2 drives robot from Point A to the finish line within 120 seconds.
               </p>
             </div>
 
-            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-3">
-              {OFFICIAL_BLOCK_PULL_TIERS.map((tier) => (
-                <div key={tier.id} className="bg-slate-900/80 border border-slate-800 rounded-2xl p-5 text-center">
-                  <div className="text-2xl font-mono font-black text-amber-400 mb-1">
-                    {tier.weight}
+            {/* 6 Block Weights Grid */}
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+              {OFFICIAL_BLOCK_WEIGHTS.map((weight) => (
+                <div key={weight.id} className="bg-slate-900/80 border border-emerald-500/30 rounded-2xl p-4 text-center">
+                  <div className="text-2xl font-display font-black text-white mb-1">
+                    {weight.label}
                   </div>
-                  <div className="text-xs font-bold text-white truncate">{tier.name}</div>
-                  <div className="mt-3 inline-block px-2.5 py-1 rounded bg-amber-500/20 text-amber-300 font-mono font-bold text-xs">
-                    {tier.basePoints} PTS
+                  <div className="text-sm text-emerald-400 font-bold font-mono">
+                    +{weight.fullPoints} PTS
+                  </div>
+                  <div className="text-[10px] text-slate-400 mt-0.5">
+                    Past Finish Line
                   </div>
                 </div>
               ))}
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 bg-slate-900/60 border border-slate-800 rounded-2xl p-5 text-xs text-slate-300">
-              <div>
-                <span className="font-bold text-amber-400 uppercase tracking-wider block mb-1">
-                  Distance Multipliers:
-                </span>
-                <p>100% Full Track (1.0x) • 75% Distance (0.75x) • 50% Distance (0.50x)</p>
-              </div>
-              <div>
+            {/* Official Scoring Rules Breakdown */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-xs text-slate-300">
+              <div className="bg-slate-900/60 border border-slate-800 rounded-2xl p-5">
                 <span className="font-bold text-emerald-400 uppercase tracking-wider block mb-1">
-                  Special Traction Bonuses:
+                  Block Pull Scoring:
                 </span>
-                <p>Sub-45s High-Speed Run (+25 pts) • Zero Wheel Slip (+15 pts)</p>
+                <p>Each block successfully pulled across the finish line awards its official full points.</p>
+              </div>
+
+              <div className="bg-slate-900/60 border border-slate-800 rounded-2xl p-5">
+                <span className="font-bold text-teal-400 uppercase tracking-wider block mb-1">
+                  Time Bonus:
+                </span>
+                <p>Total time 120s. Unused seconds award 1 bonus point per second (Time Bonus = Time Left).</p>
+              </div>
+
+              <div className="bg-slate-900/60 border border-slate-800 rounded-2xl p-5">
+                <span className="font-bold text-rose-400 uppercase tracking-wider block mb-1">
+                  Boundary Penalty:
+                </span>
+                <p>Every time robot touches or crosses boundary line: 5 points deducted per touch.</p>
               </div>
             </div>
           </div>
@@ -135,65 +160,58 @@ export const RoundOverviewScreen: React.FC = () => {
         {currentRound === 3 && (
           <div className="space-y-8">
             <div className="text-center space-y-2">
-              <span className="text-rose-400 font-mono text-sm font-bold tracking-widest uppercase">
-                FINAL STAGE
+              <span className="text-red-400 font-mono text-sm font-bold tracking-widest uppercase">
+                EVENT 3 • RED THEME
               </span>
-              <h2 className="text-4xl sm:text-6xl font-display font-black text-white">
-                ROBOT WAR COMBAT ARENA
+              <h2 className="text-4xl sm:text-6xl font-display font-black text-white flex items-center justify-center gap-3">
+                <span>ROBO WAR COMBAT ARENA</span>
+                <Flame className="w-10 h-10 text-amber-500" />
               </h2>
               <p className="text-slate-300 text-base sm:text-lg max-w-2xl mx-auto">
-                Head-to-head robot battles. Machines clash until knockout, pit out, or judicial evaluation.
+                Direct head-to-head robot combat. Total fight time 90 seconds. Winner takes all; loser receives 0 points.
               </p>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
-              <div className="bg-slate-900/80 border border-rose-900/50 rounded-2xl p-6">
-                <div className="text-rose-400 font-mono text-xs font-bold uppercase mb-1">
-                  DECISIVE KNOCKOUT
+            {/* Pit multipliers */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 max-w-3xl mx-auto">
+              <div className="bg-gradient-to-br from-red-950/60 to-slate-900 border-2 border-red-500/60 rounded-3xl p-6 text-center shadow-xl shadow-red-950/40">
+                <span className="px-3 py-1 rounded-full bg-red-500/20 text-red-300 font-mono font-bold text-xs border border-red-500/30">
+                  SCORING ZONE 1
+                </span>
+                <h3 className="text-2xl font-display font-black text-white mt-2">IN-PIT</h3>
+                <div className="text-3xl font-display font-black text-red-400 my-2">
+                  Time Left × 3
                 </div>
-                <h3 className="text-xl font-bold text-white mb-2">Arena Knockout / Ring Out</h3>
-                <p className="text-xs text-slate-400 leading-relaxed mb-4">
-                  Disabling or pushing opponent robot out of the combat ring.
+                <p className="text-xs text-slate-300">
+                  Awarded to winner when opposing robot is pushed into the inner arena pit.
                 </p>
-                <div className="font-mono text-sm text-emerald-400 font-bold">
-                  Winner: 100 PTS • Loser: 20 PTS
-                </div>
               </div>
 
-              <div className="bg-slate-900/80 border border-amber-900/50 rounded-2xl p-6">
-                <div className="text-amber-400 font-mono text-xs font-bold uppercase mb-1">
-                  END OF TIME LIMIT
+              <div className="bg-gradient-to-br from-orange-950/60 to-slate-900 border-2 border-orange-500/60 rounded-3xl p-6 text-center shadow-xl shadow-orange-950/40">
+                <span className="px-3 py-1 rounded-full bg-orange-500/20 text-orange-300 font-mono font-bold text-xs border border-orange-500/30">
+                  SCORING ZONE 2
+                </span>
+                <h3 className="text-2xl font-display font-black text-white mt-2">OUT-PIT</h3>
+                <div className="text-3xl font-display font-black text-orange-400 my-2">
+                  Time Left × 2
                 </div>
-                <h3 className="text-xl font-bold text-white mb-2">Judges Decision</h3>
-                <p className="text-xs text-slate-400 leading-relaxed mb-4">
-                  Evaluation on aggression, damage inflicted, and arena control.
+                <p className="text-xs text-slate-300">
+                  Awarded to winner when opposing robot is pushed outside the arena perimeter.
                 </p>
-                <div className="font-mono text-sm text-amber-300 font-bold">
-                  Winner: 75 PTS • Loser: 35 PTS
-                </div>
               </div>
+            </div>
 
-              <div className="bg-slate-900/80 border border-slate-800 rounded-2xl p-6">
-                <div className="text-slate-400 font-mono text-xs font-bold uppercase mb-1">
-                  STALEMATE
-                </div>
-                <h3 className="text-xl font-bold text-white mb-2">Technical Draw</h3>
-                <p className="text-xs text-slate-400 leading-relaxed mb-4">
-                  Mutual entanglement or equal performance scored by judges.
-                </p>
-                <div className="font-mono text-sm text-cyan-300 font-bold">
-                  Team A: 50 PTS • Team B: 50 PTS
-                </div>
-              </div>
+            <div className="bg-slate-900/80 border border-slate-800 rounded-2xl p-5 text-center text-xs text-slate-400 max-w-2xl mx-auto">
+              <strong className="text-white">Rule:</strong> Only the winning team receives points. The losing team receives 0 points.
             </div>
           </div>
         )}
       </main>
 
       {/* Footer */}
-      <footer className="relative z-10 border-t border-slate-800 pt-5 flex items-center justify-between text-xs font-mono text-slate-400">
-        <div>BHARAT ROBOTICS LEAGUE 2026 • OFFICIAL RULEBOOK</div>
-        <div>29 SEPTEMBER 2026</div>
+      <footer className="relative z-10 border-t border-slate-800 pt-4 flex items-center justify-between text-xs font-mono text-slate-400">
+        <div>BHARAT ROBOTICS LEAGUE 2026 • OFFICIAL COMPETITION HANDBOOK</div>
+        <div>AUTHORITATIVE BRL SCORING CRITERIA</div>
       </footer>
     </div>
   );
