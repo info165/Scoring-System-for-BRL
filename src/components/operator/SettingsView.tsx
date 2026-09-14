@@ -18,7 +18,7 @@ import {
   Wifi
 } from 'lucide-react';
 import { useCompetition } from '../../context/CompetitionContext';
-import { testConnection } from '../../lib/firebase';
+import { testConnection, firebaseConfig } from '../../lib/firebase';
 import { CompetitionStatus } from '../../types';
 
 export const SettingsView: React.FC = () => {
@@ -203,11 +203,15 @@ export const SettingsView: React.FC = () => {
           <div className="bg-slate-950/80 rounded-xl p-3 border border-slate-800 space-y-1.5 text-xs font-mono">
             <div className="flex justify-between text-slate-400">
               <span>Project ID:</span>
-              <span className="text-slate-200 font-mono">gen-lang-client-0871985313</span>
+              <span className="text-slate-200 font-mono">{firebaseConfig.projectId}</span>
+            </div>
+            <div className="flex justify-between text-slate-400">
+              <span>App ID:</span>
+              <span className="text-slate-200 font-mono text-[11px] truncate ml-2">{firebaseConfig.appId}</span>
             </div>
             <div className="flex justify-between text-slate-400">
               <span>Database ID:</span>
-              <span className="text-emerald-300 font-semibold truncate ml-2 font-mono">ai-studio-bharatroboticsle-03ff8178-f906-4ef7-8a85-ec2ecee704e9</span>
+              <span className="text-emerald-300 font-semibold truncate ml-2 font-mono">{firebaseConfig.firestoreDatabaseId || '(default)'}</span>
             </div>
             <div className="flex justify-between text-slate-400">
               <span>Sync Engine:</span>
