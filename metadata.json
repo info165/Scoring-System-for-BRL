@@ -1,0 +1,6 @@
+{
+  "name": "Bharat Robotics League Scoreboard 2026",
+  "description": "Official live competition scoreboard and operator control system for Bharat Robotics League (BRL) 2026, featuring real-time multi-window sync, official round scoring, and big-screen LED presentation modes.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
