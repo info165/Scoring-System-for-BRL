@@ -22,7 +22,7 @@ export const RobotWarScreen: React.FC = () => {
       {/* Top Header */}
       <header className="relative z-10 flex items-center justify-between border-b border-slate-800/80 pb-5">
         <div className="flex items-center space-x-3.5">
-          <img src="/brl-logo.png" alt="BRL Logo" className="w-12 h-12 rounded-xl shadow-lg shadow-rose-600/20 object-contain bg-black" />
+          <img src="/brl-logo.png" alt="BRL Logo" className="w-14 h-14 object-contain drop-shadow-[0_0_12px_rgba(225,29,72,0.35)]" />
           <div>
             <div className="text-xs font-bold text-rose-400 tracking-wider font-display flex items-center gap-1.5 uppercase">
               <span className="w-2 h-2 rounded-full bg-rose-500 animate-ping"></span>

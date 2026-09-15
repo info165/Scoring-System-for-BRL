@@ -14,7 +14,7 @@ export const WelcomeScreen: React.FC = () => {
       {/* Top Header Bar */}
       <header className="relative z-10 flex items-center justify-between border-b border-slate-800/80 pb-6">
         <div className="flex items-center space-x-4">
-          <img src="/brl-logo.png" alt="BRL Logo" className="w-20 h-20 rounded-2xl shadow-xl shadow-amber-500/20 border border-amber-300/40 object-contain bg-black" />
+          <img src="/brl-logo.png" alt="BRL Logo" className="w-24 h-24 object-contain drop-shadow-[0_0_18px_rgba(245,158,11,0.35)]" />
         </div>
 
         <div className="flex items-center space-x-4">
@@ -46,14 +46,14 @@ export const WelcomeScreen: React.FC = () => {
           >
             BHARAT
           </div>
-          <div className="font-display font-black text-5xl sm:text-6xl lg:text-7xl tracking-tight text-transparent bg-clip-text bg-gradient-to-b from-white to-slate-300 drop-shadow-[0_0_30px_rgba(226,232,240,0.35)] flex items-center justify-center">
-            <span>ROB</span>
+          <div className="font-display font-black text-5xl sm:text-6xl lg:text-7xl tracking-tight flex items-center justify-center">
+            <span className="text-transparent bg-clip-text bg-gradient-to-b from-white to-slate-300 drop-shadow-[0_0_30px_rgba(226,232,240,0.35)]">ROB</span>
             <img
-              src="/brl-chakra.png"
+              src="/brl-gear-premium.png"
               alt=""
-              className="inline-block h-[0.78em] w-[0.78em] mx-0.5 rounded-full align-middle drop-shadow-[0_0_18px_rgba(37,99,235,0.6)] animate-[spin_6s_linear_infinite]"
+              className="inline-block h-[1em] w-[1em] mx-1 align-middle object-contain animate-[spin_7s_linear_infinite]"
             />
-            <span>TICS</span>
+            <span className="text-transparent bg-clip-text bg-gradient-to-b from-white to-slate-300 drop-shadow-[0_0_30px_rgba(226,232,240,0.35)]">TICS</span>
           </div>
           <div className="font-display font-black text-5xl sm:text-6xl lg:text-7xl tracking-tight text-transparent bg-clip-text bg-gradient-to-b from-emerald-300 to-green-600 drop-shadow-[0_0_30px_rgba(34,197,94,0.45)]">
             LEAGUE

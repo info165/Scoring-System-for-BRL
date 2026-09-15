@@ -48,7 +48,7 @@ export const Header: React.FC<HeaderProps> = ({ activeTab, setActiveTab }) => {
           
           {/* Logo & League Branding */}
           <div className="flex items-center space-x-3.5">
-            <img src="/brl-logo.png" alt="BRL Logo" className="w-10 h-10 rounded-lg shadow-lg shadow-orange-500/20 border border-amber-400/40 object-contain bg-black" />
+            <img src="/brl-logo.png" alt="BRL Logo" className="w-12 h-12 object-contain drop-shadow-[0_0_10px_rgba(249,115,22,0.3)]" />
             <div>
               <div className="flex items-center space-x-2">
                 <span className="font-display font-bold text-lg sm:text-xl tracking-wider text-white uppercase">
