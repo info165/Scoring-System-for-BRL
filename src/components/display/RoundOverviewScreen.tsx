@@ -20,9 +20,7 @@ export const RoundOverviewScreen: React.FC = () => {
       {/* Top Header */}
       <header className="relative z-10 flex items-center justify-between border-b border-slate-800 pb-5">
         <div className="flex items-center space-x-3.5">
-          <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-amber-400 to-amber-600 flex items-center justify-center text-slate-950 font-display font-black text-xl shadow-lg shadow-amber-500/20">
-            BRL
-          </div>
+          <img src="/brl-logo.png" alt="BRL Logo" className="w-12 h-12 rounded-xl shadow-lg shadow-amber-500/20 object-contain bg-black" />
           <div>
             <span className="text-xs font-bold text-amber-400 tracking-wider font-display">
               BHARAT ROBOTICS LEAGUE 2026

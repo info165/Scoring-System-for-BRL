@@ -1,7 +1,6 @@
 import React from 'react';
-import { 
-  Bot, 
-  Tv, 
+import {
+  Tv,
   ExternalLink, 
   Play, 
   Pause, 
@@ -45,13 +44,11 @@ export const Header: React.FC<HeaderProps> = ({ activeTab, setActiveTab }) => {
     <header className="bg-[#0b1329] border-b border-slate-800 sticky top-0 z-40 shadow-xl">
       {/* Top Branding Bar */}
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="flex items-center justify-between h-16 sm:h-18">
+        <div className="flex items-center justify-between min-h-16 sm:min-h-18 py-2 gap-x-3">
           
           {/* Logo & League Branding */}
           <div className="flex items-center space-x-3.5">
-            <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-amber-500 via-orange-600 to-amber-700 flex items-center justify-center shadow-lg shadow-orange-500/20 border border-amber-400/40">
-              <Bot className="w-6 h-6 text-white" />
-            </div>
+            <img src="/brl-logo.png" alt="BRL Logo" className="w-10 h-10 rounded-lg shadow-lg shadow-orange-500/20 border border-amber-400/40 object-contain bg-black" />
             <div>
               <div className="flex items-center space-x-2">
                 <span className="font-display font-bold text-lg sm:text-xl tracking-wider text-white uppercase">
@@ -73,7 +70,7 @@ export const Header: React.FC<HeaderProps> = ({ activeTab, setActiveTab }) => {
           </div>
 
           {/* Quick Arena Status & Live Action Bar */}
-          <div className="hidden lg:flex items-center space-x-4">
+          <div className="hidden 2xl:flex items-center space-x-4">
             {/* Status Selector */}
             <div className="flex items-center bg-slate-900/80 rounded-lg p-1 border border-slate-700/60">
               <button

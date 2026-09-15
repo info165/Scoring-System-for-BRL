@@ -58,9 +58,7 @@ export const NowPlayingScreen: React.FC = () => {
       {/* Top Header Bar */}
       <header className="relative z-10 flex items-center justify-between border-b border-slate-800/80 pb-5">
         <div className="flex items-center space-x-3.5">
-          <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-amber-400 to-amber-600 flex items-center justify-center text-slate-950 font-display font-black text-xl shadow-lg shadow-amber-500/20">
-            BRL
-          </div>
+          <img src="/brl-logo.png" alt="BRL Logo" className="w-12 h-12 rounded-xl shadow-lg shadow-amber-500/20 object-contain bg-black" />
           <div>
             <div className="text-xs font-bold text-amber-400 tracking-wider font-display flex items-center gap-1.5">
               <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>

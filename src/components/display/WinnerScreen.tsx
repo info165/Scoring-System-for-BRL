@@ -24,9 +24,6 @@ export const WinnerScreen: React.FC<WinnerScreenProps> = ({ onClose }) => {
       <div className="absolute top-12 left-16 text-amber-400 opacity-60 animate-pulse">
         <Sparkles className="w-8 h-8" />
       </div>
-      <div className="absolute top-20 right-20 text-yellow-300 opacity-60 animate-pulse">
-        <Sparkles className="w-10 h-10" />
-      </div>
       <div className="absolute bottom-24 left-1/4 text-amber-500 opacity-40">
         <Star className="w-6 h-6" />
       </div>
@@ -34,16 +31,17 @@ export const WinnerScreen: React.FC<WinnerScreenProps> = ({ onClose }) => {
       {/* Top Header */}
       <header className="relative z-10 flex items-center justify-between border-b border-amber-500/30 pb-6">
         <div className="flex items-center space-x-4">
-          <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-amber-400 to-amber-600 flex items-center justify-center text-slate-950 font-display font-black text-2xl shadow-xl shadow-amber-500/30">
-            BRL
-          </div>
+          <img src="/brl-logo.png" alt="BRL Logo" className="w-14 h-14 rounded-2xl shadow-xl shadow-amber-500/30 object-contain bg-black" />
           <div>
             <div className="text-xs font-bold text-amber-400 tracking-widest font-display flex items-center gap-1.5 uppercase">
               <Crown className="w-3.5 h-3.5 text-amber-400" />
               <span>OFFICIAL CHAMPIONSHIP PODIUM</span>
             </div>
-            <h1 className="text-2xl sm:text-3xl font-display font-black tracking-wide text-white">
-              BHARAT ROBOTICS LEAGUE 2026 AWARDS
+            <h1 className="text-2xl sm:text-3xl font-display font-black tracking-wide">
+              <span className="text-transparent bg-clip-text bg-gradient-to-b from-orange-300 to-orange-600">BHARAT</span>{' '}
+              <span className="text-transparent bg-clip-text bg-gradient-to-b from-white to-slate-300">ROBOTICS</span>{' '}
+              <span className="text-transparent bg-clip-text bg-gradient-to-b from-emerald-300 to-green-600">LEAGUE</span>{' '}
+              <span className="text-white">2026 AWARDS</span>
             </h1>
           </div>
         </div>

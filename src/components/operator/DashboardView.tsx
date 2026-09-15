@@ -28,6 +28,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ setActiveTab }) =>
     followingSchool, 
     advanceQueue,
     setDisplayState,
+    setLeaderboardFilter,
     setCurrentRound,
     triggerWinnerMode
   } = useCompetition();
@@ -310,6 +311,34 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ setActiveTab }) =>
             ))}
           </div>
 
+          {state.displayState === 'leaderboard' && (
+            <div className="pt-1 space-y-2 border-t border-slate-800">
+              <p className="text-xs text-slate-400 pt-2">
+                Leaderboard scope shown on screen:
+              </p>
+              <div className="grid grid-cols-4 gap-2">
+                {[
+                  { id: 'all', label: 'All Rounds' },
+                  { id: 1, label: 'Round 1' },
+                  { id: 2, label: 'Round 2' },
+                  { id: 3, label: 'Round 3' },
+                ].map((opt) => (
+                  <button
+                    key={opt.id}
+                    onClick={() => setLeaderboardFilter(opt.id as any)}
+                    className={`p-2 rounded-lg text-center text-[11px] font-semibold transition border ${
+                      (state.leaderboardFilter || 'all') === opt.id
+                        ? 'bg-cyan-500 text-slate-950 border-cyan-400 font-bold shadow-md shadow-cyan-500/20'
+                        : 'bg-slate-800/80 text-slate-300 border-slate-700 hover:bg-slate-700'
+                    }`}
+                  >
+                    {opt.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
           <div className="pt-2 border-t border-slate-800">
             <div className="text-[11px] text-slate-400">
               Active Display: <strong className="text-white uppercase font-mono">{state.displayState}</strong>
@@ -360,7 +389,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ setActiveTab }) =>
             Block Pull Challenge
           </h3>
           <p className="text-xs text-slate-400 mt-1">
-            High-friction sled tow, 1.0kg to 5.0kg tiers, distance factors, traction bonuses.
+            High-friction sled tow, 1.0kg to 4.0kg tiers, distance factors, traction bonuses.
           </p>
           <div className="mt-4 flex items-center text-xs text-amber-400 font-semibold group-hover:translate-x-1 transition">
             <span>Open Round 2 Scoring</span>

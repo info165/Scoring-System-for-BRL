@@ -22,16 +22,17 @@ export const RobotWarScreen: React.FC = () => {
       {/* Top Header */}
       <header className="relative z-10 flex items-center justify-between border-b border-slate-800/80 pb-5">
         <div className="flex items-center space-x-3.5">
-          <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-rose-500 to-rose-700 flex items-center justify-center text-white font-display font-black text-xl shadow-lg shadow-rose-600/20">
-            <Swords className="w-6 h-6 text-white" />
-          </div>
+          <img src="/brl-logo.png" alt="BRL Logo" className="w-12 h-12 rounded-xl shadow-lg shadow-rose-600/20 object-contain bg-black" />
           <div>
             <div className="text-xs font-bold text-rose-400 tracking-wider font-display flex items-center gap-1.5 uppercase">
               <span className="w-2 h-2 rounded-full bg-rose-500 animate-ping"></span>
               <span>COMBAT ARENA • ROUND 3</span>
             </div>
-            <h1 className="text-xl sm:text-2xl font-display font-bold text-white tracking-wide">
-              BHARAT ROBOTICS LEAGUE 2026 ROBOT WAR
+            <h1 className="text-xl sm:text-2xl font-display font-bold tracking-wide">
+              <span className="text-transparent bg-clip-text bg-gradient-to-b from-orange-300 to-orange-600">BHARAT</span>{' '}
+              <span className="text-transparent bg-clip-text bg-gradient-to-b from-white to-slate-300">ROBOTICS</span>{' '}
+              <span className="text-transparent bg-clip-text bg-gradient-to-b from-emerald-300 to-green-600">LEAGUE</span>{' '}
+              <span className="text-white">2026 ROBOT WAR</span>
             </h1>
           </div>
         </div>

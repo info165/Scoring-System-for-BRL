@@ -116,11 +116,13 @@ export function subscribeToCompetitionState(
  */
 export async function saveCompetitionStateToFirestore(state: CompetitionState): Promise<void> {
   try {
-    // 1. Write the unified master state document for ultra-fast snapshot updates across devices
+    // 1. Write the unified master state document for ultra-fast snapshot updates across devices.
+    // No merge option: `state` is always the complete CompetitionState, and merge:true would
+    // deep-merge nested map fields (e.g. `scores`), leaving deleted entries as orphaned leftovers.
     await setDoc(competitionDocRef, {
       ...state,
       lastUpdated: Date.now()
-    }, { merge: true });
+    });
 
     // 2. Also update collections for schools, scores, matches, and audit logs
     // Using batch writes for consistency where applicable

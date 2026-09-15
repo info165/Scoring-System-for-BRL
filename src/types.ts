@@ -108,6 +108,8 @@ export interface AuditLogEntry {
   details?: Record<string, any>;
 }
 
+export type LeaderboardFilter = 'all' | 1 | 2 | 3;
+
 export interface CompetitionState {
   eventName: string;
   year: string;
@@ -115,6 +117,7 @@ export interface CompetitionState {
   status: CompetitionStatus;
   currentRound: 1 | 2 | 3;
   displayState: PublicDisplayState;
+  leaderboardFilter: LeaderboardFilter;
   activeRobotWarMatchId: string | null;
   grandWinnerSchoolId: string | null;
   runQueue: Record<1 | 2, RunQueue>;

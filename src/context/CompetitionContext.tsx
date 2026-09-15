@@ -7,6 +7,7 @@ import {
   RobotWarMatch, 
   CompetitionStatus, 
   PublicDisplayState,
+  LeaderboardFilter,
   AuditLogEntry,
   PitType
 } from '../types';
@@ -59,6 +60,7 @@ interface CompetitionContextType {
   // Navigation / State controls
   setCurrentRound: (round: 1 | 2 | 3) => void;
   setDisplayState: (state: PublicDisplayState) => void;
+  setLeaderboardFilter: (filter: LeaderboardFilter) => void;
   setCompetitionStatus: (status: CompetitionStatus) => void;
   
   // Queue Management
@@ -162,6 +164,7 @@ const defaultInitialState: CompetitionState = {
   status: 'live',
   currentRound: 1,
   displayState: 'live_run',
+  leaderboardFilter: 'all',
   activeRobotWarMatchId: 'match_1',
   grandWinnerSchoolId: null,
   runQueue: {
@@ -339,7 +342,7 @@ const defaultInitialState: CompetitionState = {
       newScore: 120
     }
   ],
-  lastUpdated: Date.now()
+  lastUpdated: 0
 };
 
 const CompetitionContext = createContext<CompetitionContextType | null>(null);
@@ -652,6 +655,14 @@ export const CompetitionProvider: React.FC<{ children: React.ReactNode }> = ({ c
     commitState({
       ...state,
       displayState,
+      lastUpdated: Date.now()
+    });
+  }, [state, commitState]);
+
+  const setLeaderboardFilter = useCallback((leaderboardFilter: LeaderboardFilter) => {
+    commitState({
+      ...state,
+      leaderboardFilter,
       lastUpdated: Date.now()
     });
   }, [state, commitState]);
@@ -1279,14 +1290,8 @@ export const CompetitionProvider: React.FC<{ children: React.ReactNode }> = ({ c
     if (historyStack.length === 0) return;
     const previous = historyStack[historyStack.length - 1];
     setHistoryStack(prev => prev.slice(0, -1));
-    setState(previous);
-    if (typeof window !== 'undefined') {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(previous));
-      const channel = new BroadcastChannel(SYNC_CHANNEL_NAME);
-      channel.postMessage({ type: 'BRL_STATE_UPDATE', state: previous });
-      channel.close();
-    }
-  }, [historyStack]);
+    commitState(previous, false);
+  }, [historyStack, commitState]);
 
   return (
     <CompetitionContext.Provider
@@ -1302,6 +1307,7 @@ export const CompetitionProvider: React.FC<{ children: React.ReactNode }> = ({ c
         grandWinner,
         setCurrentRound,
         setDisplayState,
+        setLeaderboardFilter,
         setCompetitionStatus,
         advanceQueue,
         setCurrentTeamManually,

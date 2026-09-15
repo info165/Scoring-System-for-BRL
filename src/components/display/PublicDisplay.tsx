@@ -13,7 +13,7 @@ interface PublicDisplayProps {
 }
 
 export const PublicDisplay: React.FC<PublicDisplayProps> = ({ onSwitchToOperator }) => {
-  const { state, setDisplayState } = useCompetition();
+  const { state, setDisplayState, setLeaderboardFilter } = useCompetition();
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [showControls, setShowControls] = useState(false);
 
@@ -72,6 +72,21 @@ export const PublicDisplay: React.FC<PublicDisplayProps> = ({ onSwitchToOperator
             <option value="robot_war">5. Robot War</option>
             <option value="winner">6. Winner Podium</option>
           </select>
+
+          {/* Leaderboard Round Filter (only relevant on the Leaderboard screen) */}
+          {state.displayState === 'leaderboard' && (
+            <select
+              value={state.leaderboardFilter || 'all'}
+              onChange={(e) => setLeaderboardFilter((e.target.value === 'all' ? 'all' : Number(e.target.value)) as any)}
+              className="bg-slate-950 border border-slate-700 text-slate-200 text-xs rounded-xl px-2.5 py-1.5 focus:outline-none"
+              title="Leaderboard scope"
+            >
+              <option value="all">All Rounds</option>
+              <option value="1">Round 1 Only</option>
+              <option value="2">Round 2 Only</option>
+              <option value="3">Round 3 Only</option>
+            </select>
+          )}
 
           {/* Fullscreen Toggle */}
           <button
