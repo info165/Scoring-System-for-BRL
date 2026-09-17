@@ -86,6 +86,11 @@ export const RobotWarScreen: React.FC = () => {
                         WINNER
                       </span>
                     )}
+                    {isDraw && (
+                      <span className="px-3 py-1 rounded-full bg-slate-700 text-slate-100 text-xs font-display font-black tracking-wider uppercase">
+                        DRAW
+                      </span>
+                    )}
                   </div>
 
                   <h2 className="text-3xl sm:text-4xl font-display font-black text-white leading-tight">
@@ -133,6 +138,11 @@ export const RobotWarScreen: React.FC = () => {
                     {isTeamBWinner && (
                       <span className="px-3 py-1 rounded-full bg-amber-500 text-slate-950 text-xs font-display font-black tracking-wider uppercase">
                         WINNER
+                      </span>
+                    )}
+                    {isDraw && (
+                      <span className="px-3 py-1 rounded-full bg-slate-700 text-slate-100 text-xs font-display font-black tracking-wider uppercase">
+                        DRAW
                       </span>
                     )}
                   </div>

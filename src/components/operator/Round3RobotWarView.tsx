@@ -34,12 +34,14 @@ export const Round3RobotWarView: React.FC = () => {
   const [newNotes, setNewNotes] = useState('');
 
   // Active match input states
-  const [selectedWinner, setSelectedWinner] = useState<'team_a' | 'team_b' | null>(
-    activeRobotWarMatch?.result === 'team_a_win' 
-      ? 'team_a' 
-      : activeRobotWarMatch?.result === 'team_b_win' 
-        ? 'team_b' 
-        : null
+  const [selectedWinner, setSelectedWinner] = useState<'team_a' | 'team_b' | 'draw' | null>(
+    activeRobotWarMatch?.result === 'team_a_win'
+      ? 'team_a'
+      : activeRobotWarMatch?.result === 'team_b_win'
+        ? 'team_b'
+        : activeRobotWarMatch?.result === 'draw'
+          ? 'draw'
+          : null
   );
 
   const [pitType, setPitType] = useState<PitType>(
@@ -59,6 +61,7 @@ export const Round3RobotWarView: React.FC = () => {
     if (activeRobotWarMatch) {
       if (activeRobotWarMatch.result === 'team_a_win') setSelectedWinner('team_a');
       else if (activeRobotWarMatch.result === 'team_b_win') setSelectedWinner('team_b');
+      else if (activeRobotWarMatch.result === 'draw') setSelectedWinner('draw');
       else setSelectedWinner(null);
 
       setPitType(activeRobotWarMatch.pitType || 'in_pit');
@@ -71,8 +74,8 @@ export const Round3RobotWarView: React.FC = () => {
   const teamBSchool = state.schools.find(s => s.id === activeRobotWarMatch?.teamBId);
 
   // Live calculation
-  const calculation = selectedWinner 
-    ? calculateRoboWarScore(selectedWinner, pitType, timeLeftSeconds)
+  const calculation = selectedWinner
+    ? calculateRoboWarScore(selectedWinner, selectedWinner === 'draw' ? null : pitType, timeLeftSeconds)
     : {
         multiplier: pitType === 'in_pit' ? 3 : 2,
         timeLeftSeconds,
@@ -83,12 +86,12 @@ export const Round3RobotWarView: React.FC = () => {
       };
 
   const isFormValid = !!(
-    activeRobotWarMatch && 
-    teamASchool && 
-    teamBSchool && 
-    selectedWinner && 
-    pitType && 
-    timeLeftSeconds >= 0 && 
+    activeRobotWarMatch &&
+    teamASchool &&
+    teamBSchool &&
+    selectedWinner &&
+    (selectedWinner === 'draw' || pitType) &&
+    timeLeftSeconds >= 0 &&
     timeLeftSeconds <= 90
   );
 
@@ -105,27 +108,34 @@ export const Round3RobotWarView: React.FC = () => {
 
   const handleSaveDraft = () => {
     if (!activeRobotWarMatch || !selectedWinner) {
-      setFeedbackMsg({ text: 'Please select a winner before saving draft.', type: 'error' });
+      setFeedbackMsg({ text: 'Please select a winner (or Draw) before saving draft.', type: 'error' });
       return;
     }
-    saveRobotWarDraft(activeRobotWarMatch.id, selectedWinner, pitType, timeLeftSeconds, matchNotes);
+    saveRobotWarDraft(activeRobotWarMatch.id, selectedWinner, selectedWinner === 'draw' ? null : pitType, timeLeftSeconds, matchNotes);
     setFeedbackMsg({ text: 'Match draft saved. Public display unchanged.', type: 'info' });
     setTimeout(() => setFeedbackMsg(null), 3500);
   };
 
   const handlePublishConfirmed = () => {
     if (!isFormValid || !activeRobotWarMatch || !selectedWinner) {
-      setFeedbackMsg({ text: 'Validation Error: Team A, Team B, Winner, Pit Type, and Time Left are required.', type: 'error' });
+      setFeedbackMsg({ text: 'Validation Error: Team A, Team B, Winner/Draw, Pit Type, and Time Left are required.', type: 'error' });
       return;
     }
 
-    publishRobotWarResult(activeRobotWarMatch.id, selectedWinner, pitType, timeLeftSeconds, matchNotes);
+    publishRobotWarResult(activeRobotWarMatch.id, selectedWinner, selectedWinner === 'draw' ? null : pitType, timeLeftSeconds, matchNotes);
     setIsPreviewModalOpen(false);
-    const winnerSchool = selectedWinner === 'team_a' ? teamASchool : teamBSchool;
-    setFeedbackMsg({ 
-      text: `Robot War result published! ${winnerSchool?.name} awarded ${calculation.winnerPoints} PTS.`, 
-      type: 'success' 
-    });
+    if (selectedWinner === 'draw') {
+      setFeedbackMsg({
+        text: `Robot War result published! Match ended in a draw — both teams awarded ${ROBO_WAR_CONFIG.drawPoints} PTS.`,
+        type: 'success'
+      });
+    } else {
+      const winnerSchool = selectedWinner === 'team_a' ? teamASchool : teamBSchool;
+      setFeedbackMsg({
+        text: `Robot War result published! ${winnerSchool?.name} awarded ${calculation.winnerPoints} PTS.`,
+        type: 'success'
+      });
+    }
     setTimeout(() => setFeedbackMsg(null), 4000);
   };
 
@@ -298,9 +308,9 @@ export const Round3RobotWarView: React.FC = () => {
                   <div className="mt-4 pt-3 border-t border-slate-800 flex items-center justify-between">
                     <span className="text-xs text-slate-400">Awarded Points:</span>
                     <span className={`text-2xl font-display font-black ${
-                      selectedWinner === 'team_a' ? 'text-red-400' : 'text-slate-600'
+                      selectedWinner === 'team_a' || selectedWinner === 'draw' ? 'text-red-400' : 'text-slate-600'
                     }`}>
-                      {selectedWinner === 'team_a' ? `${calculation.winnerPoints} PTS` : '0 PTS'}
+                      {selectedWinner === 'team_a' ? `${calculation.winnerPoints} PTS` : selectedWinner === 'draw' ? `${calculation.teamAPoints} PTS` : '0 PTS'}
                     </span>
                   </div>
                 </div>
@@ -338,23 +348,46 @@ export const Round3RobotWarView: React.FC = () => {
                   <div className="mt-4 pt-3 border-t border-slate-800 flex items-center justify-between">
                     <span className="text-xs text-slate-400">Awarded Points:</span>
                     <span className={`text-2xl font-display font-black ${
-                      selectedWinner === 'team_b' ? 'text-red-400' : 'text-slate-600'
+                      selectedWinner === 'team_b' || selectedWinner === 'draw' ? 'text-red-400' : 'text-slate-600'
                     }`}>
-                      {selectedWinner === 'team_b' ? `${calculation.winnerPoints} PTS` : '0 PTS'}
+                      {selectedWinner === 'team_b' ? `${calculation.winnerPoints} PTS` : selectedWinner === 'draw' ? `${calculation.teamBPoints} PTS` : '0 PTS'}
                     </span>
                   </div>
                 </div>
               </div>
 
+              {/* Draw Option */}
+              <button
+                type="button"
+                onClick={() => setSelectedWinner('draw')}
+                className={`mt-4 w-full p-4 rounded-2xl border-2 transition cursor-pointer flex items-center justify-between ${
+                  selectedWinner === 'draw'
+                    ? 'bg-amber-950/50 border-amber-500 shadow-lg shadow-amber-950/40 ring-2 ring-amber-500'
+                    : 'bg-slate-950/70 border-slate-800 hover:border-slate-700'
+                }`}
+              >
+                <div className="text-left">
+                  <span className="text-xs font-mono font-bold px-2 py-0.5 rounded bg-amber-500/20 text-amber-300 border border-amber-500/30">
+                    NO KNOCKOUT
+                  </span>
+                  <div className="font-display font-black text-white mt-1.5">Match Ended in a Draw</div>
+                  <div className="text-xs text-slate-400 mt-0.5">Neither robot pushed the other into a pit — both teams share points equally.</div>
+                </div>
+                <span className={`text-2xl font-display font-black ${selectedWinner === 'draw' ? 'text-amber-400' : 'text-slate-600'}`}>
+                  {ROBO_WAR_CONFIG.drawPoints} PTS EACH
+                </span>
+              </button>
+
               {!selectedWinner && (
                 <div className="mt-4 p-3 rounded-xl bg-amber-950/40 border border-amber-600/50 text-amber-200 text-xs flex items-center gap-2 font-medium">
                   <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0" />
-                  <span>Click on the team that won the match (Winner takes all; losing team receives 0 points).</span>
+                  <span>Click the team that won the match, or select Draw (winner takes all; losing team receives 0 points; a draw awards {ROBO_WAR_CONFIG.drawPoints} points to each team).</span>
                 </div>
               )}
             </div>
 
-            {/* Pit Type Selection: IN-PIT vs OUT-PIT */}
+            {/* Pit Type Selection: IN-PIT vs OUT-PIT (not applicable to a draw) */}
+            {selectedWinner !== 'draw' && (
             <div className="bg-slate-900/90 border border-slate-800 rounded-2xl p-5 space-y-3">
               <div className="flex items-center justify-between border-b border-slate-800 pb-3">
                 <div>
@@ -422,6 +455,7 @@ export const Round3RobotWarView: React.FC = () => {
                 </button>
               </div>
             </div>
+            )}
 
             {/* Time Left Slider (0 to 90s) */}
             <div className="bg-slate-900/90 border border-slate-800 rounded-2xl p-5 space-y-4">
@@ -513,29 +547,33 @@ export const Round3RobotWarView: React.FC = () => {
 
               <div className="mt-2 mb-4">
                 <div className="text-5xl font-display font-black text-white tracking-tight">
-                  {calculation.winnerPoints}
+                  {selectedWinner === 'draw' ? calculation.teamAPoints : calculation.winnerPoints}
                   <span className="text-lg font-normal text-red-300 ml-2 font-mono">PTS</span>
                 </div>
                 <div className="text-xs text-slate-400 mt-1">
-                  Awarded to Winner ({selectedWinner ? (selectedWinner === 'team_a' ? teamASchool.teamName : teamBSchool.teamName) : 'Select Winner'})
+                  {selectedWinner === 'draw'
+                    ? 'Awarded to Both Teams (Draw)'
+                    : `Awarded to Winner (${selectedWinner ? (selectedWinner === 'team_a' ? teamASchool.teamName : teamBSchool.teamName) : 'Select Winner'})`}
                 </div>
               </div>
 
               {/* Formula & Breakdown */}
               <div className="space-y-2.5 py-4 border-t border-b border-red-500/20 text-xs">
                 <div className="flex items-center justify-between">
-                  <span className="text-slate-300">Winner:</span>
+                  <span className="text-slate-300">{selectedWinner === 'draw' ? 'Result:' : 'Winner:'}</span>
                   <span className="font-bold text-white">
-                    {selectedWinner ? (selectedWinner === 'team_a' ? teamASchool.name : teamBSchool.name) : 'None'}
+                    {selectedWinner === 'draw' ? 'Draw' : selectedWinner ? (selectedWinner === 'team_a' ? teamASchool.name : teamBSchool.name) : 'None'}
                   </span>
                 </div>
 
-                <div className="flex items-center justify-between">
-                  <span className="text-slate-300">Scoring Area:</span>
-                  <span className="font-mono font-bold text-amber-300">
-                    {pitType === 'in_pit' ? 'IN-PIT (×3)' : 'OUT-PIT (×2)'}
-                  </span>
-                </div>
+                {selectedWinner !== 'draw' && (
+                  <div className="flex items-center justify-between">
+                    <span className="text-slate-300">Scoring Area:</span>
+                    <span className="font-mono font-bold text-amber-300">
+                      {pitType === 'in_pit' ? 'IN-PIT (×3)' : 'OUT-PIT (×2)'}
+                    </span>
+                  </div>
+                )}
 
                 <div className="flex items-center justify-between">
                   <span className="text-slate-300">Time Left:</span>
@@ -547,14 +585,16 @@ export const Round3RobotWarView: React.FC = () => {
                 <div className="flex items-center justify-between pt-2 border-t border-slate-800">
                   <span className="text-slate-300">Calculation:</span>
                   <span className="font-mono font-bold text-white">
-                    {timeLeftSeconds} × {calculation.multiplier} = {calculation.winnerPoints} pts
+                    {selectedWinner === 'draw'
+                      ? `Draw = ${ROBO_WAR_CONFIG.drawPoints} pts each`
+                      : `${timeLeftSeconds} × ${calculation.multiplier} = ${calculation.winnerPoints} pts`}
                   </span>
                 </div>
 
                 <div className="flex items-center justify-between">
-                  <span className="text-slate-300">Loser Points:</span>
+                  <span className="text-slate-300">{selectedWinner === 'draw' ? 'Other Team:' : 'Loser Points:'}</span>
                   <span className="font-mono font-bold text-slate-500">
-                    0 pts (Winner Takes All)
+                    {selectedWinner === 'draw' ? `${ROBO_WAR_CONFIG.drawPoints} pts (Draw)` : '0 pts (Winner Takes All)'}
                   </span>
                 </div>
               </div>
@@ -602,6 +642,7 @@ export const Round3RobotWarView: React.FC = () => {
                 <li>OUT-PIT formula: Time Left × 2 pts</li>
                 <li>Only winning team receives points</li>
                 <li>Losing team receives 0 points</li>
+                <li>Draw: both teams receive {ROBO_WAR_CONFIG.drawPoints} pts each</li>
               </ul>
             </div>
           </div>
@@ -636,14 +677,22 @@ export const Round3RobotWarView: React.FC = () => {
                 <span className="text-slate-500 uppercase font-mono">Team A</span>
                 <div className="font-bold text-white truncate">{teamASchool.name}</div>
                 <div className="text-red-400 font-mono font-bold text-sm mt-1">
-                  {selectedWinner === 'team_a' ? `${calculation.winnerPoints} PTS (WINNER)` : '0 PTS (LOSER)'}
+                  {selectedWinner === 'team_a'
+                    ? `${calculation.winnerPoints} PTS (WINNER)`
+                    : selectedWinner === 'draw'
+                      ? `${calculation.teamAPoints} PTS (DRAW)`
+                      : '0 PTS (LOSER)'}
                 </div>
               </div>
               <div>
                 <span className="text-slate-500 uppercase font-mono">Team B</span>
                 <div className="font-bold text-white truncate">{teamBSchool.name}</div>
                 <div className="text-blue-400 font-mono font-bold text-sm mt-1">
-                  {selectedWinner === 'team_b' ? `${calculation.winnerPoints} PTS (WINNER)` : '0 PTS (LOSER)'}
+                  {selectedWinner === 'team_b'
+                    ? `${calculation.winnerPoints} PTS (WINNER)`
+                    : selectedWinner === 'draw'
+                      ? `${calculation.teamBPoints} PTS (DRAW)`
+                      : '0 PTS (LOSER)'}
                 </div>
               </div>
             </div>
@@ -651,18 +700,20 @@ export const Round3RobotWarView: React.FC = () => {
             {/* Breakdown */}
             <div className="space-y-2.5 bg-slate-950/60 p-4 rounded-xl border border-slate-800 text-xs">
               <div className="flex justify-between items-center">
-                <span className="text-slate-400">Winning Team:</span>
+                <span className="text-slate-400">{selectedWinner === 'draw' ? 'Result:' : 'Winning Team:'}</span>
                 <span className="font-bold text-white text-sm">
-                  {selectedWinner === 'team_a' ? teamASchool.name : teamBSchool.name}
+                  {selectedWinner === 'draw' ? 'Draw' : selectedWinner === 'team_a' ? teamASchool.name : teamBSchool.name}
                 </span>
               </div>
 
-              <div className="flex justify-between items-center">
-                <span className="text-slate-400">Scoring Area:</span>
-                <span className="font-mono font-bold text-amber-300">
-                  {pitType === 'in_pit' ? 'IN-PIT (×3 Multiplier)' : 'OUT-PIT (×2 Multiplier)'}
-                </span>
-              </div>
+              {selectedWinner !== 'draw' && (
+                <div className="flex justify-between items-center">
+                  <span className="text-slate-400">Scoring Area:</span>
+                  <span className="font-mono font-bold text-amber-300">
+                    {pitType === 'in_pit' ? 'IN-PIT (×3 Multiplier)' : 'OUT-PIT (×2 Multiplier)'}
+                  </span>
+                </div>
+              )}
 
               <div className="flex justify-between items-center">
                 <span className="text-slate-400">Time Left:</span>
@@ -672,9 +723,9 @@ export const Round3RobotWarView: React.FC = () => {
               </div>
 
               <div className="flex justify-between items-center pt-2 border-t-2 border-slate-700 font-bold">
-                <span className="text-white text-sm">WINNER AWARDED SCORE:</span>
+                <span className="text-white text-sm">{selectedWinner === 'draw' ? 'EACH TEAM AWARDED:' : 'WINNER AWARDED SCORE:'}</span>
                 <span className="text-2xl font-display font-black text-red-400">
-                  {calculation.winnerPoints} PTS
+                  {selectedWinner === 'draw' ? calculation.teamAPoints : calculation.winnerPoints} PTS
                 </span>
               </div>
             </div>

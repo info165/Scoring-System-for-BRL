@@ -171,24 +171,37 @@ export const ROBO_WAR_CONFIG = {
   maxTimeSeconds: 90,
   inPitMultiplier: 3,
   outPitMultiplier: 2,
-  description: '90 seconds head-to-head. Opponent in IN-PIT = Time Left × 3 pts. Opponent in OUT-PIT = Time Left × 2 pts. Loser receives 0 pts.'
+  drawPoints: 50,
+  description: '90 seconds head-to-head. Opponent in IN-PIT = Time Left × 3 pts. Opponent in OUT-PIT = Time Left × 2 pts. Loser receives 0 pts. If the fight ends in a draw, both teams receive 50 pts each.'
 };
 
 export const calculateRoboWarScore = (
-  winner: 'team_a' | 'team_b',
-  pitType: 'in_pit' | 'out_pit',
+  result: 'team_a' | 'team_b' | 'draw',
+  pitType: 'in_pit' | 'out_pit' | null,
   timeLeftSeconds: number
 ) => {
   const safeTimeLeft = Math.max(0, Math.min(ROBO_WAR_CONFIG.totalTimeSeconds, Math.floor(timeLeftSeconds || 0)));
+
+  if (result === 'draw') {
+    return {
+      multiplier: null as number | null,
+      timeLeftSeconds: safeTimeLeft,
+      teamAPoints: ROBO_WAR_CONFIG.drawPoints,
+      teamBPoints: ROBO_WAR_CONFIG.drawPoints,
+      winnerPoints: ROBO_WAR_CONFIG.drawPoints,
+      loserPoints: ROBO_WAR_CONFIG.drawPoints
+    };
+  }
+
   const multiplier = pitType === 'in_pit' ? ROBO_WAR_CONFIG.inPitMultiplier : ROBO_WAR_CONFIG.outPitMultiplier;
   const winnerPoints = safeTimeLeft * multiplier;
   const loserPoints = 0;
 
   return {
-    multiplier,
+    multiplier: multiplier as number | null,
     timeLeftSeconds: safeTimeLeft,
-    teamAPoints: winner === 'team_a' ? winnerPoints : loserPoints,
-    teamBPoints: winner === 'team_b' ? winnerPoints : loserPoints,
+    teamAPoints: result === 'team_a' ? winnerPoints : loserPoints,
+    teamBPoints: result === 'team_b' ? winnerPoints : loserPoints,
     winnerPoints,
     loserPoints
   };

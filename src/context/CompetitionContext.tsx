@@ -78,8 +78,8 @@ interface CompetitionContextType {
   // Robot War Operations
   createRobotWarMatch: (teamAId: string, teamBId: string, matchNotes?: string) => string;
   setActiveRobotWarMatch: (matchId: string | null) => void;
-  saveRobotWarDraft: (matchId: string, winner: 'team_a' | 'team_b', pitType: PitType, timeLeftSeconds: number, notes?: string) => void;
-  publishRobotWarResult: (matchId: string, winner: 'team_a' | 'team_b', pitType: PitType, timeLeftSeconds: number, notes?: string) => void;
+  saveRobotWarDraft: (matchId: string, result: 'team_a' | 'team_b' | 'draw', pitType: PitType | null, timeLeftSeconds: number, notes?: string) => void;
+  publishRobotWarResult: (matchId: string, result: 'team_a' | 'team_b' | 'draw', pitType: PitType | null, timeLeftSeconds: number, notes?: string) => void;
   
   // School Master Data
   addSchool: (school: Omit<School, 'id'>) => void;
@@ -684,7 +684,22 @@ export const CompetitionProvider: React.FC<{ children: React.ReactNode }> = ({ c
     const oldCurrent = currentQ.currentSchoolId;
     const nextCurrent = currentQ.queueSchoolIds[0] || null;
     const remainingQueue = currentQ.queueSchoolIds.slice(1);
-    const newCompleted = [...currentQ.completedSchoolIds.filter(id => id !== oldCurrent), oldCurrent];
+
+    // Only mark a team "completed" once they actually have a published score for
+    // this round. If the operator hits Next Team before publishing (e.g. skipping
+    // a team temporarily), send them back to the end of the queue instead of
+    // silently marking them done with no score.
+    const scoreRecord = state.scores[oldCurrent];
+    const isScored = roundKey === 1
+      ? !!(scoreRecord?.round1 && !scoreRecord.round1.isDraft)
+      : !!(scoreRecord?.round2 && !scoreRecord.round2.isDraft);
+
+    const newCompleted = isScored
+      ? [...currentQ.completedSchoolIds.filter(id => id !== oldCurrent), oldCurrent]
+      : currentQ.completedSchoolIds.filter(id => id !== oldCurrent);
+    const newQueue = isScored
+      ? remainingQueue
+      : [...remainingQueue, oldCurrent];
 
     const currentSchoolObj = state.schools.find(s => s.id === oldCurrent);
     const nextSchoolObj = state.schools.find(s => s.id === nextCurrent);
@@ -695,7 +710,9 @@ export const CompetitionProvider: React.FC<{ children: React.ReactNode }> = ({ c
       round: state.currentRound,
       schoolName: currentSchoolObj?.name || 'Unknown',
       teamName: currentSchoolObj?.teamName || '',
-      action: `Next Team advanced: Now playing is ${nextSchoolObj?.name || 'End of Queue'}`
+      action: isScored
+        ? `Next Team advanced: Now playing is ${nextSchoolObj?.name || 'End of Queue'}`
+        : `Next Team advanced (${currentSchoolObj?.name || 'previous team'} skipped without a score, returned to end of queue): Now playing is ${nextSchoolObj?.name || 'End of Queue'}`
     };
 
     commitState({
@@ -704,7 +721,7 @@ export const CompetitionProvider: React.FC<{ children: React.ReactNode }> = ({ c
         ...state.runQueue,
         [roundKey]: {
           currentSchoolId: nextCurrent,
-          queueSchoolIds: remainingQueue,
+          queueSchoolIds: newQueue,
           completedSchoolIds: newCompleted
         }
       },
@@ -927,23 +944,23 @@ export const CompetitionProvider: React.FC<{ children: React.ReactNode }> = ({ c
   }, [state, commitState]);
 
   const saveRobotWarDraft = useCallback((
-    matchId: string, 
-    winner: 'team_a' | 'team_b', 
-    pitType: PitType, 
-    timeLeftSeconds: number, 
+    matchId: string,
+    result: 'team_a' | 'team_b' | 'draw',
+    pitType: PitType | null,
+    timeLeftSeconds: number,
     notes?: string
   ) => {
-    const calculated = calculateRoboWarScore(winner, pitType, timeLeftSeconds);
+    const calculated = calculateRoboWarScore(result, pitType, timeLeftSeconds);
 
     const updatedMatches = state.robotWarMatches.map(m => {
       if (m.id === matchId) {
         return {
           ...m,
-          result: winner === 'team_a' ? ('team_a_win' as const) : ('team_b_win' as const),
-          winnerId: winner === 'team_a' ? m.teamAId : m.teamBId,
-          pitType,
+          result: result === 'team_a' ? ('team_a_win' as const) : result === 'team_b' ? ('team_b_win' as const) : ('draw' as const),
+          winnerId: result === 'team_a' ? m.teamAId : result === 'team_b' ? m.teamBId : undefined,
+          pitType: result === 'draw' ? undefined : (pitType ?? undefined),
           timeLeftSeconds: calculated.timeLeftSeconds,
-          multiplier: calculated.multiplier,
+          multiplier: calculated.multiplier ?? undefined,
           teamAPoints: calculated.teamAPoints,
           teamBPoints: calculated.teamBPoints,
           matchNotes: notes ?? m.matchNotes,
@@ -961,32 +978,29 @@ export const CompetitionProvider: React.FC<{ children: React.ReactNode }> = ({ c
   }, [state, commitState]);
 
   const publishRobotWarResult = useCallback((
-    matchId: string, 
-    winner: 'team_a' | 'team_b', 
-    pitType: PitType, 
-    timeLeftSeconds: number, 
+    matchId: string,
+    result: 'team_a' | 'team_b' | 'draw',
+    pitType: PitType | null,
+    timeLeftSeconds: number,
     notes?: string
   ) => {
     const match = state.robotWarMatches.find(m => m.id === matchId);
     if (!match) return;
 
-    const calculated = calculateRoboWarScore(winner, pitType, timeLeftSeconds);
-    const winnerSchoolId = winner === 'team_a' ? match.teamAId : match.teamBId;
-    const loserSchoolId = winner === 'team_a' ? match.teamBId : match.teamAId;
+    const calculated = calculateRoboWarScore(result, pitType, timeLeftSeconds);
 
     const teamASchool = state.schools.find(s => s.id === match.teamAId);
     const teamBSchool = state.schools.find(s => s.id === match.teamBId);
-    const winnerSchool = state.schools.find(s => s.id === winnerSchoolId);
 
     const updatedMatches = state.robotWarMatches.map(m => {
       if (m.id === matchId) {
         return {
           ...m,
-          result: winner === 'team_a' ? ('team_a_win' as const) : ('team_b_win' as const),
-          winnerId: winnerSchoolId,
-          pitType,
+          result: result === 'team_a' ? ('team_a_win' as const) : result === 'team_b' ? ('team_b_win' as const) : ('draw' as const),
+          winnerId: result === 'team_a' ? m.teamAId : result === 'team_b' ? m.teamBId : undefined,
+          pitType: result === 'draw' ? undefined : (pitType ?? undefined),
           timeLeftSeconds: calculated.timeLeftSeconds,
-          multiplier: calculated.multiplier,
+          multiplier: calculated.multiplier ?? undefined,
           teamAPoints: calculated.teamAPoints,
           teamBPoints: calculated.teamBPoints,
           status: 'completed' as const,
@@ -998,49 +1012,46 @@ export const CompetitionProvider: React.FC<{ children: React.ReactNode }> = ({ c
       return m;
     });
 
-    // Update Round 3 scores for both teams (Winner gets points, Loser gets 0)
+    // Update Round 3 scores for both teams directly from the calculated per-team points
+    // (works uniformly for a win/loss split or a 50/50 draw)
     const updatedScores = { ...state.scores };
 
-    // Winner team update
-    const currentScoreW = updatedScores[winnerSchoolId] || {
-      schoolId: winnerSchoolId,
-      round1: null,
-      round2: null,
-      round3Score: 0,
-      totalScore: 0
-    };
-    const r1W = (currentScoreW.round1 && !currentScoreW.round1.isDraft) ? currentScoreW.round1.finalScore : 0;
-    const r2W = (currentScoreW.round2 && !currentScoreW.round2.isDraft) ? currentScoreW.round2.finalScore : 0;
-    updatedScores[winnerSchoolId] = {
-      ...currentScoreW,
-      round3Score: calculated.winnerPoints,
-      totalScore: r1W + r2W + calculated.winnerPoints
-    };
+    [
+      { schoolId: match.teamAId, points: calculated.teamAPoints },
+      { schoolId: match.teamBId, points: calculated.teamBPoints }
+    ].forEach(({ schoolId, points }) => {
+      const currentScore = updatedScores[schoolId] || {
+        schoolId,
+        round1: null,
+        round2: null,
+        round3Score: 0,
+        totalScore: 0
+      };
+      const r1 = (currentScore.round1 && !currentScore.round1.isDraft) ? currentScore.round1.finalScore : 0;
+      const r2 = (currentScore.round2 && !currentScore.round2.isDraft) ? currentScore.round2.finalScore : 0;
+      updatedScores[schoolId] = {
+        ...currentScore,
+        round3Score: points,
+        totalScore: r1 + r2 + points
+      };
+    });
 
-    // Loser team update
-    const currentScoreL = updatedScores[loserSchoolId] || {
-      schoolId: loserSchoolId,
-      round1: null,
-      round2: null,
-      round3Score: 0,
-      totalScore: 0
-    };
-    const r1L = (currentScoreL.round1 && !currentScoreL.round1.isDraft) ? currentScoreL.round1.finalScore : 0;
-    const r2L = (currentScoreL.round2 && !currentScoreL.round2.isDraft) ? currentScoreL.round2.finalScore : 0;
-    updatedScores[loserSchoolId] = {
-      ...currentScoreL,
-      round3Score: 0,
-      totalScore: r1L + r2L
-    };
+    let action: string;
+    if (result === 'draw') {
+      action = `Robo War: Match #${match.matchNumber} ended in a draw (${calculated.timeLeftSeconds}s left, 50 pts each)`;
+    } else {
+      const winnerSchool = result === 'team_a' ? teamASchool : teamBSchool;
+      const pitLabel = pitType === 'in_pit' ? 'IN-PIT (×3)' : 'OUT-PIT (×2)';
+      action = `Robo War: ${winnerSchool?.name} won via ${pitLabel} (${calculated.timeLeftSeconds}s left = ${calculated.winnerPoints} pts)`;
+    }
 
-    const pitLabel = pitType === 'in_pit' ? 'IN-PIT (×3)' : 'OUT-PIT (×2)';
     const log: AuditLogEntry = {
       id: `log_${Date.now()}`,
       timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
       round: 3,
       schoolName: `${teamASchool?.name || 'A'} vs ${teamBSchool?.name || 'B'}`,
       teamName: `Match #${match.matchNumber}`,
-      action: `Robo War: ${winnerSchool?.name} won via ${pitLabel} (${calculated.timeLeftSeconds}s left = ${calculated.winnerPoints} pts)`,
+      action,
       newScore: calculated.winnerPoints,
       operatorNote: notes
     };
@@ -1262,6 +1273,8 @@ export const CompetitionProvider: React.FC<{ children: React.ReactNode }> = ({ c
   }, [commitState]);
 
   const resetAllScores = useCallback(() => {
+    const activeSchoolIds = state.schools.filter(s => s.isActive).map(s => s.id);
+
     commitState({
       ...state,
       scores: {},
@@ -1274,6 +1287,10 @@ export const CompetitionProvider: React.FC<{ children: React.ReactNode }> = ({ c
         teamBPoints: 0,
         status: 'scheduled'
       })),
+      runQueue: {
+        1: { currentSchoolId: null, queueSchoolIds: activeSchoolIds, completedSchoolIds: [] },
+        2: { currentSchoolId: null, queueSchoolIds: activeSchoolIds, completedSchoolIds: [] }
+      },
       grandWinnerSchoolId: null,
       lastUpdated: Date.now()
     });

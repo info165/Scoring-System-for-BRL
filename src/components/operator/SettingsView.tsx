@@ -320,7 +320,7 @@ export const SettingsView: React.FC = () => {
               <div>
                 <h4 className="text-xs font-bold text-white">Reset All Scores</h4>
                 <p className="text-[11px] text-slate-400 mt-1">
-                  Clears all round 1, 2, and 3 match scores while preserving participating schools.
+                  Clears all round 1, 2, and 3 match scores and resets the Round 1/2 run queue, while preserving participating schools.
                 </p>
               </div>
               <button

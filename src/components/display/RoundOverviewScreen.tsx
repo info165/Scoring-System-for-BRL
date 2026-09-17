@@ -166,7 +166,7 @@ export const RoundOverviewScreen: React.FC = () => {
                 <Flame className="w-10 h-10 text-amber-500" />
               </h2>
               <p className="text-slate-300 text-base sm:text-lg max-w-2xl mx-auto">
-                Direct head-to-head robot combat. Total fight time 90 seconds. Winner takes all; loser receives 0 points.
+                Direct head-to-head robot combat. Total fight time 90 seconds. Winner takes all; loser receives 0 points. A draw awards {ROBO_WAR_CONFIG.drawPoints} points to each team.
               </p>
             </div>
 
@@ -199,8 +199,13 @@ export const RoundOverviewScreen: React.FC = () => {
               </div>
             </div>
 
-            <div className="bg-slate-900/80 border border-slate-800 rounded-2xl p-5 text-center text-xs text-slate-400 max-w-2xl mx-auto">
-              <strong className="text-white">Rule:</strong> Only the winning team receives points. The losing team receives 0 points.
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 max-w-3xl mx-auto text-xs text-slate-400">
+              <div className="bg-slate-900/80 border border-slate-800 rounded-2xl p-5 text-center">
+                <strong className="text-white">Winner Takes All:</strong> Only the winning team receives points. The losing team receives 0 points.
+              </div>
+              <div className="bg-amber-950/40 border border-amber-600/40 rounded-2xl p-5 text-center">
+                <strong className="text-amber-300">Draw:</strong> If neither robot pushes the other into a pit, both teams receive {ROBO_WAR_CONFIG.drawPoints} points each.
+              </div>
             </div>
           </div>
         )}
