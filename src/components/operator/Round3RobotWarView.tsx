@@ -1,29 +1,31 @@
 import React, { useState } from 'react';
-import { 
-  Swords, 
-  Trophy, 
-  Send, 
-  Save, 
-  Plus, 
-  CheckCircle, 
-  Clock, 
+import {
+  Swords,
+  Trophy,
+  Send,
+  Save,
+  Plus,
+  CheckCircle,
+  Clock,
   AlertTriangle,
   Flame,
   Tv,
   Info,
-  Check
+  Check,
+  Trash2
 } from 'lucide-react';
 import { useCompetition } from '../../context/CompetitionContext';
 import { ROBO_WAR_CONFIG, calculateRoboWarScore } from '../../data/officialRules';
 import { PitType } from '../../types';
 
 export const Round3RobotWarView: React.FC = () => {
-  const { 
-    state, 
-    activeRobotWarMatch, 
-    setActiveRobotWarMatch, 
-    createRobotWarMatch, 
-    saveRobotWarDraft, 
+  const {
+    state,
+    activeRobotWarMatch,
+    setActiveRobotWarMatch,
+    createRobotWarMatch,
+    deleteRobotWarMatch,
+    saveRobotWarDraft,
     publishRobotWarResult,
     setDisplayState
   } = useCompetition();
@@ -32,6 +34,7 @@ export const Round3RobotWarView: React.FC = () => {
   const [newTeamA, setNewTeamA] = useState('');
   const [newTeamB, setNewTeamB] = useState('');
   const [newNotes, setNewNotes] = useState('');
+  const [confirmDeleteMatchId, setConfirmDeleteMatchId] = useState<string | null>(null);
 
   // Active match input states
   const [selectedWinner, setSelectedWinner] = useState<'team_a' | 'team_b' | 'draw' | null>(
@@ -98,8 +101,7 @@ export const Round3RobotWarView: React.FC = () => {
   const handleCreateMatch = (e: React.FormEvent) => {
     e.preventDefault();
     if (!newTeamA || !newTeamB || newTeamA === newTeamB) return;
-    const matchId = createRobotWarMatch(newTeamA, newTeamB, newNotes);
-    setActiveRobotWarMatch(matchId);
+    createRobotWarMatch(newTeamA, newTeamB, newNotes);
     setIsCreateModalOpen(false);
     setNewTeamA('');
     setNewTeamB('');
@@ -223,17 +225,19 @@ export const Round3RobotWarView: React.FC = () => {
             const isCompleted = match.status === 'completed' && !match.isDraft;
 
             return (
-              <button
+              <div
                 key={match.id}
-                type="button"
+                role="button"
+                tabIndex={0}
                 onClick={() => setActiveRobotWarMatch(match.id)}
-                className={`p-3 rounded-xl border text-left transition ${
+                onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') setActiveRobotWarMatch(match.id); }}
+                className={`relative p-3 rounded-xl border text-left transition cursor-pointer ${
                   isActive
                     ? 'bg-red-950/60 border-red-500 ring-1 ring-red-500 shadow-md shadow-red-950/40'
                     : 'bg-slate-950/60 border-slate-800 hover:border-slate-700'
                 }`}
               >
-                <div className="flex items-center justify-between text-[11px] font-mono mb-1">
+                <div className="flex items-center justify-between text-[11px] font-mono mb-1 pr-5">
                   <span className="font-bold text-slate-300">MATCH #{match.matchNumber}</span>
                   {isCompleted ? (
                     <span className="text-emerald-400 font-bold">COMPLETED</span>
@@ -250,7 +254,21 @@ export const Round3RobotWarView: React.FC = () => {
                 <div className="text-xs font-bold text-white truncate">
                   {teamB?.name || 'Team B'}
                 </div>
-              </button>
+
+                {!isCompleted && (
+                  <button
+                    type="button"
+                    title="Remove this scheduled match"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setConfirmDeleteMatchId(match.id);
+                    }}
+                    className="absolute top-2.5 right-2.5 p-1 text-slate-500 hover:text-rose-400 hover:bg-slate-800 rounded transition"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                  </button>
+                )}
+              </div>
             );
           })}
         </div>
@@ -835,6 +853,40 @@ export const Round3RobotWarView: React.FC = () => {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* DELETE MATCH CONFIRMATION MODAL */}
+      {confirmDeleteMatchId && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
+          <div className="bg-slate-900 border-2 border-rose-500/80 rounded-3xl p-6 sm:p-8 max-w-sm w-full shadow-2xl space-y-5">
+            <h3 className="text-lg font-display font-bold text-white flex items-center gap-2">
+              <Trash2 className="w-5 h-5 text-rose-400" />
+              <span>Remove Scheduled Match?</span>
+            </h3>
+            <p className="text-xs text-slate-400">
+              This removes the match entirely. This cannot be undone. Completed/published matches cannot be removed this way.
+            </p>
+            <div className="flex items-center justify-end gap-3">
+              <button
+                type="button"
+                onClick={() => setConfirmDeleteMatchId(null)}
+                className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl text-xs font-semibold"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  deleteRobotWarMatch(confirmDeleteMatchId);
+                  setConfirmDeleteMatchId(null);
+                }}
+                className="px-5 py-2 bg-rose-600 hover:bg-rose-500 text-white rounded-xl text-xs font-bold"
+              >
+                Confirm Remove
+              </button>
+            </div>
           </div>
         </div>
       )}

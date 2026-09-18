@@ -45,7 +45,7 @@ export const Round1BlockPushView: React.FC = () => {
     '4kg': 'none',
   });
 
-  const [timeLeftSeconds, setTimeLeftSeconds] = useState<number>(45);
+  const [timeLeftSeconds, setTimeLeftSeconds] = useState<number>(0);
   const [notes, setNotes] = useState<string>('');
   const [isPreviewModalOpen, setIsPreviewModalOpen] = useState<boolean>(false);
   const [feedbackMsg, setFeedbackMsg] = useState<{ text: string; type: 'success' | 'info' } | null>(null);
@@ -92,7 +92,7 @@ export const Round1BlockPushView: React.FC = () => {
           '2kg': 'none',
           '4kg': 'none',
         });
-        setTimeLeftSeconds(45);
+        setTimeLeftSeconds(0);
         setNotes('');
       }
     }

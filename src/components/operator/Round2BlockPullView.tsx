@@ -35,7 +35,7 @@ export const Round2BlockPullView: React.FC = () => {
   
   // Selected weights pulled: array of weight IDs (e.g. ['200g', '1kg'])
   const [pulledBlockIds, setPulledBlockIds] = useState<string[]>([]);
-  const [timeLeftSeconds, setTimeLeftSeconds] = useState<number>(30);
+  const [timeLeftSeconds, setTimeLeftSeconds] = useState<number>(0);
   const [boundaryTouches, setBoundaryTouches] = useState<number>(0);
   const [notes, setNotes] = useState<string>('');
   
@@ -62,7 +62,7 @@ export const Round2BlockPullView: React.FC = () => {
         setNotes(existing.notes || '');
       } else {
         setPulledBlockIds([]);
-        setTimeLeftSeconds(30);
+        setTimeLeftSeconds(0);
         setBoundaryTouches(0);
         setNotes('');
       }

@@ -77,6 +77,7 @@ interface CompetitionContextType {
   
   // Robot War Operations
   createRobotWarMatch: (teamAId: string, teamBId: string, matchNotes?: string) => string;
+  deleteRobotWarMatch: (matchId: string) => void;
   setActiveRobotWarMatch: (matchId: string | null) => void;
   saveRobotWarDraft: (matchId: string, result: 'team_a' | 'team_b' | 'draw', pitType: PitType | null, timeLeftSeconds: number, notes?: string) => void;
   publishRobotWarResult: (matchId: string, result: 'team_a' | 'team_b' | 'draw', pitType: PitType | null, timeLeftSeconds: number, notes?: string) => void;
@@ -935,6 +936,16 @@ export const CompetitionProvider: React.FC<{ children: React.ReactNode }> = ({ c
     return newId;
   }, [state, commitState]);
 
+  const deleteRobotWarMatch = useCallback((matchId: string) => {
+    const updatedMatches = state.robotWarMatches.filter(m => m.id !== matchId);
+    commitState({
+      ...state,
+      robotWarMatches: updatedMatches,
+      activeRobotWarMatchId: state.activeRobotWarMatchId === matchId ? null : state.activeRobotWarMatchId,
+      lastUpdated: Date.now()
+    });
+  }, [state, commitState]);
+
   const setActiveRobotWarMatch = useCallback((matchId: string | null) => {
     commitState({
       ...state,
@@ -1103,10 +1114,17 @@ export const CompetitionProvider: React.FC<{ children: React.ReactNode }> = ({ c
     const updatedScores = { ...state.scores };
     delete updatedScores[id];
 
+    const updatedRobotWarMatches = state.robotWarMatches.filter(
+      m => m.teamAId !== id && m.teamBId !== id
+    );
+    const activeMatchRemoved = !updatedRobotWarMatches.some(m => m.id === state.activeRobotWarMatchId);
+
     commitState({
       ...state,
       schools: updatedSchools,
       scores: updatedScores,
+      robotWarMatches: updatedRobotWarMatches,
+      activeRobotWarMatchId: activeMatchRemoved ? null : state.activeRobotWarMatchId,
       runQueue: {
         1: {
           currentSchoolId: state.runQueue[1].currentSchoolId === id ? null : state.runQueue[1].currentSchoolId,
@@ -1336,6 +1354,7 @@ export const CompetitionProvider: React.FC<{ children: React.ReactNode }> = ({ c
         saveBlockPullDraft,
         publishBlockPullScore,
         createRobotWarMatch,
+        deleteRobotWarMatch,
         setActiveRobotWarMatch,
         saveRobotWarDraft,
         publishRobotWarResult,

@@ -26,6 +26,8 @@ export const LiveControlView: React.FC<LiveControlViewProps> = ({ setActiveTab }
     currentSchool,
     upNextSchool,
     followingSchool,
+    activeRobotWarMatch,
+    setActiveRobotWarMatch,
     advanceQueue,
     setCurrentTeamManually,
     reorderQueue,
@@ -35,6 +37,7 @@ export const LiveControlView: React.FC<LiveControlViewProps> = ({ setActiveTab }
   } = useCompetition();
 
   const [selectedQueueTeamId, setSelectedQueueTeamId] = useState<string>('');
+  const isRobotWar = state.currentRound === 3;
   const roundKey = state.currentRound === 3 ? 1 : state.currentRound;
   const currentQueue = state.runQueue[roundKey] || { currentSchoolId: null, queueSchoolIds: [], completedSchoolIds: [] };
 
@@ -45,6 +48,20 @@ export const LiveControlView: React.FC<LiveControlViewProps> = ({ setActiveTab }
   const completedSchools = currentQueue.completedSchoolIds
     .map(id => state.schools.find(s => s.id === id))
     .filter(Boolean) as typeof state.schools;
+
+  const getMatchLabel = (match: (typeof state.robotWarMatches)[number]) => {
+    const teamA = state.schools.find(s => s.id === match.teamAId);
+    const teamB = state.schools.find(s => s.id === match.teamBId);
+    return `${teamA?.name || 'TBD'} vs ${teamB?.name || 'TBD'}`;
+  };
+
+  const scheduledMatches = state.robotWarMatches.filter(m => m.status === 'scheduled');
+  const completedMatches = state.robotWarMatches.filter(m => m.status === 'completed');
+  const upNextMatch = scheduledMatches.find(m => m.id !== activeRobotWarMatch?.id) || null;
+  const followingMatch = scheduledMatches.filter(m => m.id !== upNextMatch?.id).find(m => m.id !== activeRobotWarMatch?.id) || null;
+
+  const activeMatchTeamA = activeRobotWarMatch ? state.schools.find(s => s.id === activeRobotWarMatch.teamAId) : null;
+  const activeMatchTeamB = activeRobotWarMatch ? state.schools.find(s => s.id === activeRobotWarMatch.teamBId) : null;
 
   const moveQueueItem = (index: number, direction: 'up' | 'down') => {
     const list = [...currentQueue.queueSchoolIds];
@@ -119,7 +136,31 @@ export const LiveControlView: React.FC<LiveControlViewProps> = ({ setActiveTab }
               </span>
             </div>
 
-            {currentSchool ? (
+            {isRobotWar ? (
+              activeRobotWarMatch ? (
+                <div className="space-y-3 mt-2">
+                  <div className="text-xl font-display font-bold text-white leading-tight">
+                    <span>{activeMatchTeamA?.name || 'TBD'}</span>
+                    <span className="text-red-400 mx-2">VS</span>
+                    <span>{activeMatchTeamB?.name || 'TBD'}</span>
+                  </div>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="px-2.5 py-0.5 rounded bg-cyan-500/20 text-cyan-300 font-mono text-xs font-bold border border-cyan-500/30">
+                      Match #{activeRobotWarMatch.matchNumber}
+                    </span>
+                    <span className="text-sm font-semibold text-slate-200">
+                      {activeRobotWarMatch.matchNotes || 'Arena Match'}
+                    </span>
+                  </div>
+                </div>
+              ) : (
+                <div className="text-center py-8 text-slate-400">
+                  <Clock className="w-8 h-8 mx-auto text-slate-400 mb-2" />
+                  <p className="font-semibold text-white">No Match Currently Active</p>
+                  <p className="text-xs text-slate-400 mt-1">Schedule a match in Round 3 or select one below.</p>
+                </div>
+              )
+            ) : currentSchool ? (
               <div className="space-y-3 mt-2">
                 <div className="text-2xl font-display font-bold text-white leading-tight">
                   {currentSchool.name}
@@ -165,33 +206,57 @@ export const LiveControlView: React.FC<LiveControlViewProps> = ({ setActiveTab }
               </button>
 
               <button
-                onClick={advanceQueue}
-                className="w-full py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs rounded-xl transition flex items-center justify-center space-x-1.5 shadow-md shadow-emerald-600/20"
+                onClick={() => {
+                  if (isRobotWar) {
+                    if (upNextMatch) setActiveRobotWarMatch(upNextMatch.id);
+                  } else {
+                    advanceQueue();
+                  }
+                }}
+                disabled={isRobotWar && !upNextMatch}
+                className="w-full py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs rounded-xl transition flex items-center justify-center space-x-1.5 shadow-md shadow-emerald-600/20 disabled:opacity-40"
               >
                 <SkipForward className="w-3.5 h-3.5" />
-                <span>NEXT TEAM</span>
+                <span>{isRobotWar ? 'NEXT MATCH' : 'NEXT TEAM'}</span>
               </button>
             </div>
 
-            {/* Set Current Team Manually */}
+            {/* Set Current Team / Match Manually */}
             <div className="pt-2">
               <label className="text-[11px] text-slate-400 block mb-1">
-                Force Set Current Team (Direct Override):
+                {isRobotWar ? 'Force Set Active Match (Direct Override):' : 'Force Set Current Team (Direct Override):'}
               </label>
-              <select
-                value={currentSchool?.id || ''}
-                onChange={(e) => {
-                  if (e.target.value) setCurrentTeamManually(e.target.value);
-                }}
-                className="w-full bg-slate-900 border border-slate-700 text-slate-200 text-xs rounded-lg px-2.5 py-1.5 focus:outline-none focus:border-amber-500"
-              >
-                <option value="">-- Choose Team --</option>
-                {state.schools.filter(s => s.isActive).map((s) => (
-                  <option key={s.id} value={s.id}>
-                    {s.name} ({s.teamName})
-                  </option>
-                ))}
-              </select>
+              {isRobotWar ? (
+                <select
+                  value={activeRobotWarMatch?.id || ''}
+                  onChange={(e) => {
+                    if (e.target.value) setActiveRobotWarMatch(e.target.value);
+                  }}
+                  className="w-full bg-slate-900 border border-slate-700 text-slate-200 text-xs rounded-lg px-2.5 py-1.5 focus:outline-none focus:border-amber-500"
+                >
+                  <option value="">-- Choose Match --</option>
+                  {state.robotWarMatches.map((m) => (
+                    <option key={m.id} value={m.id}>
+                      Match #{m.matchNumber}: {getMatchLabel(m)}
+                    </option>
+                  ))}
+                </select>
+              ) : (
+                <select
+                  value={currentSchool?.id || ''}
+                  onChange={(e) => {
+                    if (e.target.value) setCurrentTeamManually(e.target.value);
+                  }}
+                  className="w-full bg-slate-900 border border-slate-700 text-slate-200 text-xs rounded-lg px-2.5 py-1.5 focus:outline-none focus:border-amber-500"
+                >
+                  <option value="">-- Choose Team --</option>
+                  {state.schools.filter(s => s.isActive).map((s) => (
+                    <option key={s.id} value={s.id}>
+                      {s.name} ({s.teamName})
+                    </option>
+                  ))}
+                </select>
+              )}
             </div>
           </div>
         </div>
@@ -204,7 +269,9 @@ export const LiveControlView: React.FC<LiveControlViewProps> = ({ setActiveTab }
                 <Clock className="w-4 h-4 text-cyan-400" />
                 <span>Staging & Pit Queue</span>
               </h3>
-              <span className="text-xs text-slate-400">{queuedSchools.length} Teams Waiting</span>
+              <span className="text-xs text-slate-400">
+                {isRobotWar ? `${scheduledMatches.length} Matches Scheduled` : `${queuedSchools.length} Teams Waiting`}
+              </span>
             </div>
 
             {/* UP NEXT Preview Card */}
@@ -213,7 +280,20 @@ export const LiveControlView: React.FC<LiveControlViewProps> = ({ setActiveTab }
                 <span>1. UP NEXT (ON DECK)</span>
                 <span className="text-slate-400">Position 1</span>
               </div>
-              {upNextSchool ? (
+              {isRobotWar ? (
+                upNextMatch ? (
+                  <div>
+                    <div className="text-base font-bold text-white truncate">
+                      {getMatchLabel(upNextMatch)}
+                    </div>
+                    <div className="text-xs text-slate-400 mt-0.5 truncate">
+                      Match #{upNextMatch.matchNumber} • {upNextMatch.matchNotes || 'Arena Match'}
+                    </div>
+                  </div>
+                ) : (
+                  <div className="text-xs text-slate-400 py-1">No upcoming match scheduled</div>
+                )
+              ) : upNextSchool ? (
                 <div>
                   <div className="text-base font-bold text-white truncate">
                     {upNextSchool.name}
@@ -233,7 +313,20 @@ export const LiveControlView: React.FC<LiveControlViewProps> = ({ setActiveTab }
                 <span>2. FOLLOWING</span>
                 <span className="text-slate-400">Position 2</span>
               </div>
-              {followingSchool ? (
+              {isRobotWar ? (
+                followingMatch ? (
+                  <div>
+                    <div className="text-sm font-bold text-slate-200 truncate">
+                      {getMatchLabel(followingMatch)}
+                    </div>
+                    <div className="text-xs text-slate-400 mt-0.5 truncate">
+                      Match #{followingMatch.matchNumber} • {followingMatch.matchNotes || 'Arena Match'}
+                    </div>
+                  </div>
+                ) : (
+                  <div className="text-xs text-slate-400 py-1">No further matches scheduled</div>
+                )
+              ) : followingSchool ? (
                 <div>
                   <div className="text-sm font-bold text-slate-200 truncate">
                     {followingSchool.name}
@@ -249,7 +342,7 @@ export const LiveControlView: React.FC<LiveControlViewProps> = ({ setActiveTab }
           </div>
 
           <div className="pt-3 border-t border-slate-800 text-xs text-slate-400">
-            Pressing <span className="text-emerald-400 font-bold">NEXT TEAM</span> advances <em>UP NEXT</em> into the arena.
+            Pressing <span className="text-emerald-400 font-bold">{isRobotWar ? 'NEXT MATCH' : 'NEXT TEAM'}</span> advances <em>UP NEXT</em> into the arena.
           </div>
         </div>
 
@@ -306,12 +399,50 @@ export const LiveControlView: React.FC<LiveControlViewProps> = ({ setActiveTab }
           <div className="flex items-center justify-between">
             <h3 className="text-sm font-bold text-white flex items-center gap-2">
               <Users className="w-4 h-4 text-cyan-400" />
-              <span>Remaining Run Queue ({queuedSchools.length})</span>
+              <span>
+                {isRobotWar ? `Remaining Matches (${scheduledMatches.length})` : `Remaining Run Queue (${queuedSchools.length})`}
+              </span>
             </h3>
-            <span className="text-xs text-slate-400">Use arrows to adjust order</span>
+            <span className="text-xs text-slate-400">
+              {isRobotWar ? 'Schedule matches in the Round 3 tab' : 'Use arrows to adjust order'}
+            </span>
           </div>
 
-          {queuedSchools.length === 0 ? (
+          {isRobotWar ? (
+            scheduledMatches.length === 0 ? (
+              <div className="text-center py-6 text-slate-400 text-xs">
+                No scheduled matches remaining for Round 3.
+              </div>
+            ) : (
+              <div className="space-y-1.5 max-h-72 overflow-y-auto pr-1">
+                {scheduledMatches.map((match, index) => (
+                  <div
+                    key={match.id}
+                    className="flex items-center justify-between p-2.5 bg-slate-950/60 border border-slate-800/80 rounded-lg text-xs hover:border-slate-700 transition"
+                  >
+                    <div className="flex items-center space-x-2.5 truncate">
+                      <span className="font-mono font-bold text-slate-400 w-5 text-right">
+                        {index + 1}.
+                      </span>
+                      <div className="truncate">
+                        <span className="font-bold text-white truncate block">{getMatchLabel(match)}</span>
+                        <span className="text-[11px] text-slate-400">Match #{match.matchNumber} • {match.matchNotes || 'Arena Match'}</span>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center space-x-1 flex-shrink-0">
+                      <button
+                        onClick={() => setActiveRobotWarMatch(match.id)}
+                        className="px-2 py-0.5 bg-slate-800 hover:bg-amber-500 hover:text-black text-amber-400 text-[10px] font-bold rounded transition ml-1"
+                      >
+                        Make Active
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )
+          ) : queuedSchools.length === 0 ? (
             <div className="text-center py-6 text-slate-400 text-xs">
               All teams have completed their runs for Round {state.currentRound}.
             </div>
@@ -367,12 +498,54 @@ export const LiveControlView: React.FC<LiveControlViewProps> = ({ setActiveTab }
           <div className="flex items-center justify-between">
             <h3 className="text-sm font-bold text-white flex items-center gap-2">
               <CheckCircle className="w-4 h-4 text-emerald-400" />
-              <span>Completed Runs ({completedSchools.length})</span>
+              <span>
+                {isRobotWar ? `Completed Matches (${completedMatches.length})` : `Completed Runs (${completedSchools.length})`}
+              </span>
             </h3>
             <span className="text-xs text-emerald-400 font-mono">Round {state.currentRound}</span>
           </div>
 
-          {completedSchools.length === 0 ? (
+          {isRobotWar ? (
+            completedMatches.length === 0 ? (
+              <div className="text-center py-6 text-slate-400 text-xs">
+                No completed matches recorded yet for Round 3.
+              </div>
+            ) : (
+              <div className="space-y-1.5 max-h-72 overflow-y-auto pr-1">
+                {completedMatches.map((match) => {
+                  const teamA = state.schools.find(s => s.id === match.teamAId);
+                  const teamB = state.schools.find(s => s.id === match.teamBId);
+                  const winner = match.result === 'team_a_win' ? teamA : match.result === 'team_b_win' ? teamB : null;
+                  const resultLabel = match.result === 'draw' ? 'Draw' : winner ? `Winner: ${winner.name}` : 'Pending';
+
+                  return (
+                    <div
+                      key={match.id}
+                      className="flex items-center justify-between p-2.5 bg-slate-950/40 border border-slate-800/80 rounded-lg text-xs"
+                    >
+                      <div className="truncate">
+                        <span className="font-medium text-slate-200 truncate block">{getMatchLabel(match)}</span>
+                        <span className="text-[11px] text-slate-400">Match #{match.matchNumber} • {resultLabel}</span>
+                      </div>
+
+                      <div className="flex items-center space-x-2">
+                        <span className="font-mono font-bold text-amber-400 bg-amber-500/10 px-2 py-0.5 rounded border border-amber-500/20">
+                          {match.teamAPoints}-{match.teamBPoints}
+                        </span>
+                        <button
+                          onClick={() => setActiveRobotWarMatch(match.id)}
+                          title="Open this match again for review or correction"
+                          className="text-[10px] text-slate-400 hover:text-slate-200 px-1.5 py-0.5 rounded hover:bg-slate-800"
+                        >
+                          Review
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )
+          ) : completedSchools.length === 0 ? (
             <div className="text-center py-6 text-slate-400 text-xs">
               No completed runs recorded yet for this round.
             </div>

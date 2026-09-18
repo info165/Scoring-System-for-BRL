@@ -4,8 +4,7 @@ import {
   Search, 
   Download, 
   Printer, 
-  Medal, 
-  AlertTriangle,
+  Medal,
   FileSpreadsheet,
   CheckCircle,
   Clock,
@@ -15,7 +14,7 @@ import {
 import { useCompetition } from '../../context/CompetitionContext';
 
 export const LeaderboardView: React.FC = () => {
-  const { leaderboard, state, hasActiveTie } = useCompetition();
+  const { leaderboard, state } = useCompetition();
   const [search, setSearch] = useState('');
 
   const filteredLeaderboard = leaderboard.filter((entry) => {
@@ -115,26 +114,6 @@ export const LeaderboardView: React.FC = () => {
           </button>
         </div>
       </div>
-
-      {/* Active Tie Alert Banner */}
-      {hasActiveTie && (
-        <div className="bg-amber-950/60 border-2 border-amber-500/70 rounded-2xl p-4 flex items-center justify-between text-amber-200 text-xs">
-          <div className="flex items-center space-x-3">
-            <AlertTriangle className="w-5 h-5 text-amber-400 flex-shrink-0" />
-            <div>
-              <span className="font-bold uppercase tracking-wider text-amber-300 block">
-                Official Tie Detected in Standings
-              </span>
-              <span>
-                Multiple teams share identical total points. Under official BRL 2026 rules, no secondary metric is used to automatically break ties; tied teams remain flagged for referee or organizer resolution.
-              </span>
-            </div>
-          </div>
-          <span className="px-3 py-1 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/40 font-mono font-bold whitespace-nowrap ml-3">
-            FLAGGED [TIE]
-          </span>
-        </div>
-      )}
 
       {/* Podium Cards for Top 3 */}
       {leaderboard.length >= 3 && (

@@ -1,5 +1,5 @@
 import React, { useMemo } from 'react';
-import { Trophy, AlertTriangle, AlertCircle } from 'lucide-react';
+import { Trophy } from 'lucide-react';
 import { useCompetition } from '../../context/CompetitionContext';
 
 const ROUND_META: Record<1 | 2 | 3, { label: string; short: string; badgeClass: string }> = {
@@ -9,7 +9,7 @@ const ROUND_META: Record<1 | 2 | 3, { label: string; short: string; badgeClass: 
 };
 
 export const LeaderboardScreen: React.FC = () => {
-  const { leaderboard, state, hasActiveTie } = useCompetition();
+  const { leaderboard, state } = useCompetition();
   const filter = state.leaderboardFilter || 'all';
 
   // When a single round is selected, re-rank teams by that round's score only.
@@ -71,28 +71,6 @@ export const LeaderboardScreen: React.FC = () => {
           <span className="text-slate-400">29 SEPT 2026</span>
         </div>
       </header>
-
-      {/* Active Tie Notification for Stage Audience & Referees */}
-      {hasActiveTie && (
-        <div className="relative z-10 my-2 mx-auto max-w-7xl w-full bg-amber-950/80 border-2 border-amber-500 rounded-2xl p-4 flex items-center justify-between shadow-xl">
-          <div className="flex items-center space-x-3">
-            <div className="p-2 rounded-xl bg-amber-500 text-slate-950">
-              <AlertTriangle className="w-5 h-5 stroke-[2.5]" />
-            </div>
-            <div>
-              <div className="text-xs font-bold uppercase tracking-wider text-amber-300">
-                Official Regulation Notice
-              </div>
-              <div className="text-sm font-bold text-white">
-                TIE DETECTED: Tied teams share equal rank. No secondary tie-breaker is applied automatically per official BRL rules.
-              </div>
-            </div>
-          </div>
-          <span className="px-3 py-1 rounded-full bg-amber-500/20 text-amber-300 font-mono font-bold text-xs border border-amber-500/40">
-            REFEREE DECISION PENDING
-          </span>
-        </div>
-      )}
 
       {/* Main Leaderboard Table Stage View */}
       <main className="relative z-10 my-auto py-4 max-w-7xl mx-auto w-full">

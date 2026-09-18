@@ -1,5 +1,5 @@
 import React from 'react';
-import { Trophy, Medal, Sparkles, Crown, Award, Star, AlertTriangle } from 'lucide-react';
+import { Trophy, Medal, Sparkles, Crown, Award, Star } from 'lucide-react';
 import { useCompetition } from '../../context/CompetitionContext';
 
 interface WinnerScreenProps {
@@ -7,7 +7,7 @@ interface WinnerScreenProps {
 }
 
 export const WinnerScreen: React.FC<WinnerScreenProps> = ({ onClose }) => {
-  const { leaderboard, hasActiveTie } = useCompetition();
+  const { leaderboard } = useCompetition();
 
   const champion = leaderboard[0];
   const runnerUp1 = leaderboard[1];
@@ -61,18 +61,6 @@ export const WinnerScreen: React.FC<WinnerScreenProps> = ({ onClose }) => {
           )}
         </div>
       </header>
-
-      {/* Tie Alert on Podium if exists */}
-      {hasActiveTie && (
-        <div className="relative z-10 my-2 max-w-4xl mx-auto bg-amber-950/80 border border-amber-500/80 rounded-2xl p-3 px-4 flex items-center justify-between text-amber-200 text-xs">
-          <div className="flex items-center space-x-2.5">
-            <AlertTriangle className="w-4 h-4 text-amber-400 flex-shrink-0" />
-            <span>
-              <strong>Official Note:</strong> Active tie in tournament scores. Per BRL 2026 rules, tied teams share honors pending referee/organizer determination.
-            </span>
-          </div>
-        </div>
-      )}
 
       {/* Main Podium Centerpiece */}
       <main className="relative z-10 my-auto py-6 max-w-6xl mx-auto w-full space-y-6">
