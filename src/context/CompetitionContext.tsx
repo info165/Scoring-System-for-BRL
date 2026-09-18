@@ -815,7 +815,7 @@ export const CompetitionProvider: React.FC<{ children: React.ReactNode }> = ({ c
       action: oldScore > 0 
         ? `Block Push score corrected: ${oldScore} → ${publishedScore.finalScore}`
         : `Block Push score published: ${publishedScore.finalScore} (Blocks: ${publishedScore.blockScore}, Time Bonus: ${publishedScore.timeBonus})`,
-      oldScore: oldScore > 0 ? oldScore : undefined,
+      oldScore: oldScore > 0 ? oldScore : null,
       newScore: publishedScore.finalScore,
       operatorNote: publishedScore.notes
     };
@@ -887,7 +887,7 @@ export const CompetitionProvider: React.FC<{ children: React.ReactNode }> = ({ c
       action: oldScore > 0 
         ? `Block Pull score corrected: ${oldScore} → ${publishedScore.finalScore}` 
         : `Block Pull score published: ${publishedScore.finalScore} (Blocks: ${publishedScore.blockScore}, Bonus: ${publishedScore.timeBonus}, Penalty: ${publishedScore.boundaryPenalty})`,
-      oldScore: oldScore > 0 ? oldScore : undefined,
+      oldScore: oldScore > 0 ? oldScore : null,
       newScore: publishedScore.finalScore,
       operatorNote: publishedScore.notes
     };
@@ -957,10 +957,10 @@ export const CompetitionProvider: React.FC<{ children: React.ReactNode }> = ({ c
         return {
           ...m,
           result: result === 'team_a' ? ('team_a_win' as const) : result === 'team_b' ? ('team_b_win' as const) : ('draw' as const),
-          winnerId: result === 'team_a' ? m.teamAId : result === 'team_b' ? m.teamBId : undefined,
-          pitType: result === 'draw' ? undefined : (pitType ?? undefined),
+          winnerId: result === 'team_a' ? m.teamAId : result === 'team_b' ? m.teamBId : null,
+          pitType: result === 'draw' ? null : (pitType ?? null),
           timeLeftSeconds: calculated.timeLeftSeconds,
-          multiplier: calculated.multiplier ?? undefined,
+          multiplier: calculated.multiplier ?? null,
           teamAPoints: calculated.teamAPoints,
           teamBPoints: calculated.teamBPoints,
           matchNotes: notes ?? m.matchNotes,
@@ -997,10 +997,10 @@ export const CompetitionProvider: React.FC<{ children: React.ReactNode }> = ({ c
         return {
           ...m,
           result: result === 'team_a' ? ('team_a_win' as const) : result === 'team_b' ? ('team_b_win' as const) : ('draw' as const),
-          winnerId: result === 'team_a' ? m.teamAId : result === 'team_b' ? m.teamBId : undefined,
-          pitType: result === 'draw' ? undefined : (pitType ?? undefined),
+          winnerId: result === 'team_a' ? m.teamAId : result === 'team_b' ? m.teamBId : null,
+          pitType: result === 'draw' ? null : (pitType ?? null),
           timeLeftSeconds: calculated.timeLeftSeconds,
-          multiplier: calculated.multiplier ?? undefined,
+          multiplier: calculated.multiplier ?? null,
           teamAPoints: calculated.teamAPoints,
           teamBPoints: calculated.teamBPoints,
           status: 'completed' as const,
@@ -1281,7 +1281,9 @@ export const CompetitionProvider: React.FC<{ children: React.ReactNode }> = ({ c
       robotWarMatches: state.robotWarMatches.map(m => ({
         ...m,
         result: 'pending',
-        winnerId: undefined,
+        winnerId: null,
+        pitType: null,
+        multiplier: null,
         timeLeftSeconds: 0,
         teamAPoints: 0,
         teamBPoints: 0,

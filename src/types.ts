@@ -69,10 +69,10 @@ export interface RobotWarMatch {
   teamAId: string;
   teamBId: string;
   result: WarResult;
-  winnerId?: string;
-  pitType?: PitType;
+  winnerId?: string | null;
+  pitType?: PitType | null;
   timeLeftSeconds: number; // 0 to 90s
-  multiplier?: number; // 3 for in-pit, 2 for out-pit
+  multiplier?: number | null; // 3 for in-pit, 2 for out-pit
   teamAPoints: number;
   teamBPoints: number;
   matchNotes?: string;
@@ -102,7 +102,7 @@ export interface AuditLogEntry {
   schoolName: string;
   teamName: string;
   action: string;
-  oldScore?: number;
+  oldScore?: number | null;
   newScore?: number;
   operatorNote?: string;
   details?: Record<string, any>;
