@@ -1,84 +1,77 @@
 import React from 'react';
 import { 
-  Play, 
   Clock, 
-  Trophy, 
-  Sparkles, 
-  CheckCircle, 
-  Layers, 
-  ShieldAlert,
+  AlertTriangle,
+  Flame,
   ArrowRight,
-  Zap,
-  Check
+  ShieldCheck
 } from 'lucide-react';
 import { useCompetition } from '../../context/CompetitionContext';
+import { useArenaTimer } from '../../hooks/useArenaTimer';
 
 export const NowPlayingScreen: React.FC = () => {
   const { 
     state, 
     currentSchool, 
     upNextSchool, 
-    followingSchool, 
-    leaderboard 
+    followingSchool 
   } = useCompetition();
 
-  const currentScoreRecord = currentSchool ? state.scores[currentSchool.id] : null;
   const currentRound = state.currentRound;
-
-  // Published score for current round
-  const round1Data = currentScoreRecord?.round1;
-  const round2Data = currentScoreRecord?.round2;
-  const round3Score = currentScoreRecord?.round3Score || 0;
-
-  const currentRoundScore = currentRound === 1 
-    ? (!round1Data?.isDraft ? round1Data?.finalScore : null)
-    : currentRound === 2 
-      ? (!round2Data?.isDraft ? round2Data?.finalScore : null)
-      : round3Score;
-
-  // Find team's overall rank on leaderboard
-  const teamLeaderboardEntry = currentSchool 
-    ? leaderboard.find(e => e.school.id === currentSchool.id)
-    : null;
-
-  const getThemeColor = () => {
-    if (currentRound === 1) return { border: 'border-blue-500/60', text: 'text-blue-400', badge: 'bg-blue-500/20 text-blue-300 border-blue-500/30' };
-    if (currentRound === 2) return { border: 'border-emerald-500/60', text: 'text-emerald-400', badge: 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30' };
-    return { border: 'border-red-500/60', text: 'text-red-400', badge: 'bg-red-500/20 text-red-300 border-red-500/30' };
-  };
-
-  const theme = getThemeColor();
+  const { 
+    remainingSeconds, 
+    formattedTime, 
+    status: timerStatus, 
+    isUrgent, 
+    isTimeOver 
+  } = useArenaTimer();
 
   return (
     <div className="min-h-screen bg-slate-950 text-white flex flex-col justify-between p-6 sm:p-10 relative overflow-hidden font-sans select-none">
       {/* Dynamic Arena Glows */}
-      <div className="absolute top-0 right-0 w-[600px] h-[600px] bg-blue-500/10 rounded-full blur-[160px] pointer-events-none"></div>
+      <div className={`absolute top-0 right-0 w-[650px] h-[650px] rounded-full blur-[170px] pointer-events-none transition-colors duration-700 ${
+        isUrgent || isTimeOver ? 'bg-red-600/20' : 'bg-blue-600/15'
+      }`}></div>
       <div className="absolute bottom-0 left-0 w-[600px] h-[600px] bg-amber-500/10 rounded-full blur-[160px] pointer-events-none"></div>
 
       {/* Top Header Bar */}
       <header className="relative z-10 flex items-center justify-between border-b border-slate-800/80 pb-5">
         <div className="flex items-center space-x-3.5">
-          <img src="/brl-logo.png" alt="BRL Logo" className="w-14 h-14 object-contain drop-shadow-[0_0_12px_rgba(245,158,11,0.35)]" />
+          <img 
+            src="/brl-logo.png" 
+            alt="BRL Logo" 
+            className="w-14 h-14 object-contain drop-shadow-[0_0_12px_rgba(245,158,11,0.35)]" 
+          />
           <div>
             <div className="text-xs font-bold text-amber-400 tracking-wider font-display flex items-center gap-1.5">
-              <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
-              <span>LIVE ARENA RUN • BHARAT ROBOTICS LEAGUE 2026</span>
+              <span className={`w-2.5 h-2.5 rounded-full ${
+                timerStatus === 'running' ? 'bg-emerald-400 animate-pulse' : 'bg-amber-400'
+              }`}></span>
+              <span>BHARAT ROBOTICS LEAGUE 2026 • OFFICIAL ARENA</span>
             </div>
             <h1 className="text-xl sm:text-2xl font-display font-bold text-white tracking-wide">
-              {currentRound === 1 && 'Round 1: Block Push Challenge (Blue)'}
-              {currentRound === 2 && 'Round 2: Block Pull Challenge (Green)'}
-              {currentRound === 3 && 'Round 3: Robo War Arena Combat (Red)'}
+              {currentRound === 1 && 'ROUND 1 — BLOCK PUSH CHALLENGE'}
+              {currentRound === 2 && 'ROUND 2 — BLOCK PULL CHALLENGE'}
+              {currentRound === 3 && 'ROUND 3 — ROBO WAR ARENA COMBAT'}
             </h1>
           </div>
         </div>
 
         <div className="flex items-center space-x-3">
           <div className="text-right">
-            <div className="text-[11px] font-mono text-slate-400">ARENA DATE</div>
-            <div className="text-sm font-display font-bold text-slate-200">29 SEPT 2026</div>
+            <div className="text-[11px] font-mono text-slate-400">ARENA STATUS</div>
+            <div className="text-sm font-display font-bold text-slate-200">
+              {timerStatus === 'running' ? 'MATCH IN PROGRESS' : isTimeOver ? 'TIME EXPIRED' : 'POD READY'}
+            </div>
           </div>
-          <span className="px-3 py-1 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 text-xs font-bold font-mono">
-            LIVE ARENA
+          <span className={`px-3.5 py-1.5 rounded-full text-xs font-bold font-mono uppercase tracking-wider border ${
+            timerStatus === 'running' 
+              ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40 animate-pulse'
+              : isTimeOver
+                ? 'bg-red-500/20 text-red-300 border-red-500/40'
+                : 'bg-blue-500/20 text-blue-300 border-blue-500/40'
+          }`}>
+            {timerStatus === 'running' ? '● LIVE ARENA' : isTimeOver ? 'TIME OVER' : 'STAGED'}
           </span>
         </div>
       </header>
@@ -86,19 +79,23 @@ export const NowPlayingScreen: React.FC = () => {
       {/* Main Stage Presentation Center */}
       <main className="relative z-10 my-auto py-6 grid grid-cols-1 lg:grid-cols-12 gap-8 items-center max-w-7xl mx-auto w-full">
         
-        {/* Left 8 Cols: NOW PLAYING HERO SPOTLIGHT */}
-        <div className={`lg:col-span-8 bg-gradient-to-br from-slate-900 via-[#0e1731] to-slate-900 border-2 ${theme.border} rounded-3xl p-8 sm:p-10 shadow-2xl relative overflow-hidden`}>
+        {/* Left 8 Cols: NOW PLAYING HERO SPOTLIGHT & SYNCHRONIZED TIMER */}
+        <div className={`lg:col-span-8 bg-gradient-to-br from-slate-900 via-[#0e1731] to-slate-900 border-2 rounded-3xl p-8 sm:p-10 shadow-2xl relative overflow-hidden transition-all duration-300 ${
+          isUrgent 
+            ? 'border-red-500 shadow-red-950/50' 
+            : isTimeOver 
+              ? 'border-red-600 bg-red-950/20' 
+              : 'border-blue-500/60'
+        }`}>
           <div className="flex items-center justify-between mb-4">
             <span className="inline-flex items-center space-x-2 px-3.5 py-1 rounded-full bg-emerald-500/20 text-emerald-400 text-xs font-bold uppercase tracking-widest border border-emerald-500/40">
               <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping"></span>
               <span>NOW PLAYING IN ARENA</span>
             </span>
 
-            {teamLeaderboardEntry && (
-              <span className="text-xs font-mono font-bold px-3 py-1 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/30">
-                {teamLeaderboardEntry.isTied ? `T-RANK #${teamLeaderboardEntry.rank} [TIED]` : `OVERALL RANK #${teamLeaderboardEntry.rank}`} ({teamLeaderboardEntry.totalScore} PTS)
-              </span>
-            )}
+            <span className="text-xs font-mono font-bold text-slate-400 uppercase tracking-wider">
+              {currentSchool?.teamNumber || 'POD 1'}
+            </span>
           </div>
 
           {currentSchool ? (
@@ -111,7 +108,7 @@ export const NowPlayingScreen: React.FC = () => {
                   <span className="px-3 py-1 rounded-lg bg-blue-500/20 text-blue-300 font-mono font-bold text-sm border border-blue-500/30">
                     {currentSchool.teamNumber}
                   </span>
-                  <span className="text-xl font-bold text-amber-400">
+                  <span className="text-2xl font-bold text-amber-400">
                     {currentSchool.teamName}
                   </span>
                   <span className="text-slate-400 font-medium text-sm">• {currentSchool.city}</span>
@@ -119,7 +116,7 @@ export const NowPlayingScreen: React.FC = () => {
               </div>
 
               {currentSchool.students && currentSchool.students.length > 0 && (
-                <div className="bg-slate-950/60 border border-slate-800 rounded-xl p-3.5 text-xs text-slate-300">
+                <div className="bg-slate-950/70 border border-slate-800 rounded-xl p-3.5 text-xs text-slate-300">
                   <span className="text-slate-400 font-mono block text-[11px] mb-1">
                     STUDENT OPERATORS & PILOTS:
                   </span>
@@ -129,105 +126,83 @@ export const NowPlayingScreen: React.FC = () => {
                 </div>
               )}
 
-              {/* Live Run Score Display */}
-              <div className="pt-4 border-t border-slate-800 grid grid-cols-1 sm:grid-cols-2 gap-4">
-                
-                {/* Official Round Score Status */}
-                <div className="bg-slate-950/80 border border-slate-800 rounded-2xl p-5 flex flex-col justify-between">
-                  <span className="text-xs font-mono text-slate-400 uppercase tracking-wider">
-                    ROUND {currentRound} OFFICIAL POINTS
+              {/* Prominent Synchronized Countdown Timer (STRICTLY NO SCORE SHOWN) */}
+              <div className={`pt-6 border-t rounded-2xl p-6 transition-all duration-300 ${
+                isTimeOver
+                  ? 'bg-red-950/60 border-red-600/80 shadow-inner'
+                  : isUrgent
+                    ? 'bg-red-950/40 border-red-500 animate-pulse'
+                    : 'bg-slate-950/80 border-slate-800'
+              }`}>
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-xs font-mono text-slate-400 uppercase tracking-widest flex items-center gap-2">
+                    <Clock className={`w-4 h-4 ${isUrgent || isTimeOver ? 'text-red-400' : 'text-cyan-400'}`} />
+                    <span>TIME REMAINING</span>
                   </span>
-                  <div className="my-2">
-                    {currentRoundScore !== null && currentRoundScore !== undefined ? (
-                      <div className="text-5xl font-display font-black text-amber-400 tracking-tight">
-                        {currentRoundScore}
-                        <span className="text-base font-normal text-slate-400 ml-2">PTS</span>
-                      </div>
-                    ) : (
-                      <div className="text-2xl font-display font-bold text-cyan-300 animate-pulse">
-                        RUN IN PROGRESS...
-                      </div>
-                    )}
-                  </div>
-                  <span className="text-[11px] text-slate-400">
-                    {currentRoundScore !== null ? 'Officially Verified & Published' : 'Arena run in progress'}
-                  </span>
+
+                  {isUrgent && (
+                    <span className="inline-flex items-center gap-1.5 text-xs font-bold text-red-400 font-mono animate-bounce">
+                      <AlertTriangle className="w-3.5 h-3.5" />
+                      <span>FINAL 10 SECONDS!</span>
+                    </span>
+                  )}
+
+                  {isTimeOver && (
+                    <span className="inline-flex items-center gap-1.5 text-xs font-bold text-red-400 font-mono">
+                      <Flame className="w-3.5 h-3.5" />
+                      <span>OFFICIAL RUN ENDED</span>
+                    </span>
+                  )}
                 </div>
 
-                {/* Performance Breakdown Highlights */}
-                <div className="bg-slate-950/80 border border-slate-800 rounded-2xl p-5 flex flex-col justify-between text-xs text-slate-300">
-                  <span className="text-xs font-mono text-slate-400 uppercase tracking-wider">
-                    SCORE BREAKDOWN
-                  </span>
-                  
-                  {currentRound === 1 && round1Data && !round1Data.isDraft && (
-                    <div className="space-y-1 my-2">
-                      <div className="flex justify-between">
-                        <span className="text-slate-400">Block Subtotal:</span>
-                        <span className="font-bold text-white">+{round1Data.blockScore} pts</span>
+                {/* Big Timer Digits */}
+                <div className="text-center py-4">
+                  {isTimeOver ? (
+                    <div className="space-y-1">
+                      <div className="text-6xl sm:text-8xl font-mono font-black text-red-500 tracking-wider animate-pulse">
+                        00:00
                       </div>
-                      <div className="flex justify-between">
-                        <span className="text-slate-400">Time Left ({round1Data.timeLeftSeconds}s):</span>
-                        <span className="font-mono text-emerald-400">+{round1Data.timeBonus} pts</span>
+                      <div className="text-2xl sm:text-3xl font-display font-black text-red-400 tracking-wider uppercase">
+                        TIME OVER
                       </div>
-                      <div className="flex justify-between pt-1 border-t border-slate-800">
-                        <span className="text-slate-300 font-bold">Round 1 Final:</span>
-                        <span className="font-mono font-bold text-blue-400">{round1Data.finalScore} pts</span>
-                      </div>
+                    </div>
+                  ) : (
+                    <div className={`text-6xl sm:text-8xl lg:text-9xl font-mono font-black tracking-tight leading-none transition-colors ${
+                      isUrgent 
+                        ? 'text-red-500 drop-shadow-[0_0_25px_rgba(239,68,68,0.5)]' 
+                        : timerStatus === 'running' 
+                          ? 'text-amber-400 drop-shadow-[0_0_20px_rgba(245,158,11,0.25)]' 
+                          : 'text-slate-100'
+                    }`}>
+                      {formattedTime}
                     </div>
                   )}
 
-                  {currentRound === 2 && round2Data && !round2Data.isDraft && (
-                    <div className="space-y-1 my-2">
-                      <div className="flex justify-between">
-                        <span className="text-slate-400">Pulled Subtotal:</span>
-                        <span className="font-bold text-white">+{round2Data.blockScore} pts</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-slate-400">Time Left ({round2Data.timeLeftSeconds}s):</span>
-                        <span className="font-mono text-emerald-400">+{round2Data.timeBonus} pts</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-slate-400">Boundary Touches ({round2Data.boundaryTouches}):</span>
-                        <span className="font-mono text-rose-400">-{round2Data.boundaryPenalty} pts</span>
-                      </div>
-                      <div className="flex justify-between pt-1 border-t border-slate-800">
-                        <span className="text-slate-300 font-bold">Round 2 Final:</span>
-                        <span className="font-mono font-bold text-emerald-400">{round2Data.finalScore} pts</span>
-                      </div>
-                    </div>
-                  )}
-
-                  {currentRound === 3 && (
-                    <div className="my-2 space-y-1">
-                      <div className="text-sm font-bold text-rose-400">Head-to-Head Robo War</div>
-                      <div className="text-slate-400 text-[11px]">
-                        IN-PIT: Time Left × 3 • OUT-PIT: Time Left × 2
-                      </div>
-                      <div className="text-slate-300 pt-1 font-mono">
-                        Round 3 Score: {round3Score} pts
-                      </div>
-                    </div>
-                  )}
-
-                  {((currentRound === 1 && (!round1Data || round1Data.isDraft)) ||
-                    (currentRound === 2 && (!round2Data || round2Data.isDraft))) && (
-                    <div className="my-2 text-slate-500 italic">
-                      Judges calculating score breakdown...
-                    </div>
-                  )}
-
-                  <div className="text-[11px] text-slate-400 pt-2 border-t border-slate-900">
-                    Official Bharat Robotics League 2026 Rules
+                  <div className="mt-3 flex items-center justify-center gap-2 text-xs font-mono text-slate-400">
+                    <span>STATUS:</span>
+                    <span className={`font-bold ${
+                      timerStatus === 'running' 
+                        ? 'text-emerald-400' 
+                        : isTimeOver 
+                          ? 'text-red-400' 
+                          : 'text-amber-400'
+                    }`}>
+                      {timerStatus === 'running' ? 'CLOCK RUNNING' : isTimeOver ? 'STOPPED (TIME OVER)' : timerStatus === 'stopped' ? 'CLOCK STOPPED' : 'AWAITING START'}
+                    </span>
                   </div>
                 </div>
 
+                <div className="pt-3 border-t border-slate-800/80 flex items-center justify-between text-[11px] font-mono text-slate-500">
+                  <span>OFFICIAL ROUND TIME: 120 SECONDS</span>
+                  <span>SCORES RELEASED ON LEADERBOARD AFTER RUN</span>
+                </div>
               </div>
+
             </div>
           ) : (
-            <div className="py-16 text-center text-slate-400 space-y-2">
-              <Clock className="w-12 h-12 mx-auto text-slate-600 mb-2" />
-              <h3 className="text-2xl font-display font-bold text-white">
+            <div className="py-20 text-center text-slate-400 space-y-3">
+              <Clock className="w-14 h-14 mx-auto text-slate-600 mb-2" />
+              <h3 className="text-3xl font-display font-bold text-white">
                 Arena Preparing For Next Run
               </h3>
               <p className="text-slate-400 text-sm">Teams are positioning in the staging pit.</p>
@@ -235,27 +210,27 @@ export const NowPlayingScreen: React.FC = () => {
           )}
         </div>
 
-        {/* Right 4 Cols: UP NEXT & STAGING QUEUE */}
+        {/* Right 4 Cols: UP NEXT & STAGING QUEUE (Strictly No Scores) */}
         <div className="lg:col-span-4 space-y-5">
           
           <div className="text-sm font-bold text-slate-300 uppercase tracking-wider font-display flex items-center gap-2">
             <Clock className="w-4 h-4 text-cyan-400" />
-            <span>ARENA RUN QUEUE</span>
+            <span>ARENA QUEUE</span>
           </div>
 
           {/* UP NEXT CARD */}
-          <div className="bg-slate-900/90 border-2 border-cyan-500/60 rounded-2xl p-5 relative overflow-hidden shadow-xl shadow-cyan-950/30">
-            <div className="text-[11px] font-bold text-cyan-400 uppercase tracking-widest mb-1.5 flex items-center justify-between">
+          <div className="bg-slate-900/95 border-2 border-cyan-500/60 rounded-2xl p-6 relative overflow-hidden shadow-xl shadow-cyan-950/30">
+            <div className="text-[11px] font-bold text-cyan-400 uppercase tracking-widest mb-2 flex items-center justify-between">
               <span>UP NEXT (ON DECK)</span>
-              <span className="font-mono">PRE-ARENA</span>
+              <span className="font-mono bg-cyan-950/60 px-2 py-0.5 rounded border border-cyan-800">READY</span>
             </div>
 
             {upNextSchool ? (
-              <div className="space-y-1">
-                <div className="text-xl font-display font-bold text-white truncate">
+              <div className="space-y-1.5">
+                <div className="text-2xl font-display font-bold text-white">
                   {upNextSchool.name}
                 </div>
-                <div className="text-xs text-amber-300 font-semibold truncate">
+                <div className="text-base text-amber-300 font-semibold">
                   {upNextSchool.teamName} ({upNextSchool.teamNumber})
                 </div>
                 <div className="text-xs text-slate-400">
@@ -263,22 +238,22 @@ export const NowPlayingScreen: React.FC = () => {
                 </div>
               </div>
             ) : (
-              <div className="text-xs text-slate-500 py-3">No team in slot</div>
+              <div className="text-xs text-slate-500 py-4">No team in queue slot</div>
             )}
           </div>
 
           {/* FOLLOWING CARD */}
-          <div className="bg-slate-900/60 border border-slate-800 rounded-2xl p-5">
-            <div className="text-[11px] font-bold text-slate-400 uppercase tracking-widest mb-1.5">
-              FOLLOWING
+          <div className="bg-slate-900/60 border border-slate-800 rounded-2xl p-6">
+            <div className="text-[11px] font-bold text-slate-400 uppercase tracking-widest mb-2">
+              FOLLOWING IN QUEUE
             </div>
 
             {followingSchool ? (
               <div className="space-y-1">
-                <div className="text-base font-display font-bold text-slate-200 truncate">
+                <div className="text-lg font-display font-bold text-slate-200">
                   {followingSchool.name}
                 </div>
-                <div className="text-xs text-slate-400 truncate">
+                <div className="text-sm text-slate-300 font-medium">
                   {followingSchool.teamName} ({followingSchool.teamNumber})
                 </div>
                 <div className="text-xs text-slate-500">
@@ -286,8 +261,17 @@ export const NowPlayingScreen: React.FC = () => {
                 </div>
               </div>
             ) : (
-              <div className="text-xs text-slate-600 py-2">Queue complete</div>
+              <div className="text-xs text-slate-600 py-3">Queue complete</div>
             )}
+          </div>
+
+          {/* Arena Challenge Notice */}
+          <div className="bg-slate-950/60 border border-slate-800/80 rounded-2xl p-4 text-xs text-slate-400 flex items-start gap-3">
+            <ShieldCheck className="w-5 h-5 text-blue-400 shrink-0 mt-0.5" />
+            <div>
+              <div className="font-bold text-slate-300 mb-0.5">BRL Evaluator Pods</div>
+              <div>Judges verify block boundary positions and log official times directly beside the arena ring.</div>
+            </div>
           </div>
         </div>
 
@@ -296,7 +280,7 @@ export const NowPlayingScreen: React.FC = () => {
       {/* Footer */}
       <footer className="relative z-10 border-t border-slate-800/80 pt-4 flex items-center justify-between text-xs font-mono text-slate-400">
         <div>BHARAT ROBOTICS LEAGUE 2026 • OFFICIAL ARENA STAGE</div>
-        <div>REAL-TIME ARENA TELEMETRY</div>
+        <div>SYNCHRONIZED ARENA TELEMETRY</div>
       </footer>
     </div>
   );

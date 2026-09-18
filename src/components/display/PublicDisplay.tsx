@@ -4,6 +4,7 @@ import { useCompetition } from '../../context/CompetitionContext';
 import { WelcomeScreen } from './WelcomeScreen';
 import { RoundOverviewScreen } from './RoundOverviewScreen';
 import { NowPlayingScreen } from './NowPlayingScreen';
+import { ResultRevealScreen } from './ResultRevealScreen';
 import { LeaderboardScreen } from './LeaderboardScreen';
 import { RobotWarScreen } from './RobotWarScreen';
 import { WinnerScreen } from './WinnerScreen';
@@ -35,6 +36,7 @@ export const PublicDisplay: React.FC<PublicDisplayProps> = ({ onSwitchToOperator
       {state.displayState === 'welcome' && <WelcomeScreen />}
       {state.displayState === 'current_round' && <RoundOverviewScreen />}
       {state.displayState === 'live_run' && <NowPlayingScreen />}
+      {state.displayState === 'result_reveal' && <ResultRevealScreen />}
       {state.displayState === 'leaderboard' && <LeaderboardScreen />}
       {state.displayState === 'robot_war' && <RobotWarScreen />}
       {state.displayState === 'winner' && <WinnerScreen />}

@@ -10,16 +10,23 @@ import {
   ShieldCheck,
   Cloud,
   CloudOff,
-  RefreshCw
+  RefreshCw,
+  LogOut,
+  User,
+  ShieldAlert
 } from 'lucide-react';
 import { useCompetition } from '../../context/CompetitionContext';
+import { useAuth } from '../../context/AuthContext';
+import { UserRole } from '../../types';
 
 interface HeaderProps {
   activeTab: string;
   setActiveTab: (tab: string) => void;
+  activeView?: 'operator' | 'display';
+  setActiveView?: (view: 'operator' | 'display') => void;
 }
 
-export const Header: React.FC<HeaderProps> = ({ activeTab, setActiveTab }) => {
+export const Header: React.FC<HeaderProps> = ({ activeTab, setActiveTab, activeView, setActiveView }) => {
   const { 
     state, 
     setCompetitionStatus, 
@@ -36,9 +43,27 @@ export const Header: React.FC<HeaderProps> = ({ activeTab, setActiveTab }) => {
     forceCloudSync
   } = useCompetition();
 
+  const { currentUser, userRole, logout, switchRoleQuickly } = useAuth();
+
   const openDisplayInNewTab = () => {
     window.open(`${window.location.origin}${window.location.pathname}?mode=display`, '_blank');
   };
+
+  const allTabs = [
+    { id: 'dashboard', label: '1. Dashboard', roles: ['ADMIN', 'CONTROLLER', 'EVALUATOR'] },
+    { id: 'live_control', label: '2. Live Control & Queue', roles: ['ADMIN', 'CONTROLLER'] },
+    { id: 'schools', label: '3. Schools / Teams', roles: ['ADMIN', 'CONTROLLER'] },
+    { id: 'round_1', label: '4. Round 1: Block Push', roles: ['ADMIN', 'CONTROLLER', 'EVALUATOR'] },
+    { id: 'round_2', label: '5. Round 2: Block Pull', roles: ['ADMIN', 'CONTROLLER', 'EVALUATOR'] },
+    { id: 'round_3', label: '6. Round 3: Robot War', roles: ['ADMIN', 'CONTROLLER', 'EVALUATOR'] },
+    { id: 'leaderboard', label: '7. Leaderboard', roles: ['ADMIN', 'CONTROLLER', 'EVALUATOR'] },
+    { id: 'score_history', label: '8. Score History', roles: ['ADMIN', 'CONTROLLER', 'EVALUATOR'] },
+    { id: 'display_view', label: '9. Display Mode', roles: ['ADMIN', 'CONTROLLER', 'EVALUATOR'] },
+    { id: 'users', label: '10. User Management', roles: ['ADMIN'] },
+    { id: 'settings', label: '11. Settings & Rules', roles: ['ADMIN'] },
+  ];
+
+  const visibleTabs = allTabs.filter(tab => !userRole || tab.roles.includes(userRole));
 
   return (
     <header className="bg-[#0b1329] border-b border-slate-800 sticky top-0 z-40 shadow-xl">
@@ -188,25 +213,52 @@ export const Header: React.FC<HeaderProps> = ({ activeTab, setActiveTab }) => {
             >
               {isDisplayMode ? 'Back to Operator' : 'Preview Display'}
             </button>
+
+            {/* Authenticated User Badge & Quick Role Switcher */}
+            {currentUser && (
+              <div className="flex items-center space-x-1.5 bg-slate-900/90 border border-slate-700/80 rounded-lg px-2 py-1">
+                <span className={`px-1.5 py-0.5 rounded text-[10px] font-mono font-bold uppercase tracking-wider border ${
+                  userRole === 'ADMIN'
+                    ? 'bg-purple-500/20 text-purple-300 border-purple-500/40'
+                    : userRole === 'CONTROLLER'
+                      ? 'bg-cyan-500/20 text-cyan-300 border-cyan-500/40'
+                      : 'bg-amber-500/20 text-amber-300 border-amber-500/40'
+                }`}>
+                  {userRole}
+                </span>
+                <span className="hidden xl:inline text-xs font-semibold text-slate-200 truncate max-w-[120px]">
+                  {currentUser.displayName.split(' ')[0]}
+                </span>
+
+                {/* Quick Role Switcher */}
+                <select
+                  value={userRole}
+                  onChange={(e) => switchRoleQuickly(e.target.value as UserRole)}
+                  className="bg-slate-950 border border-slate-700 text-slate-300 text-[10px] font-mono rounded px-1 py-0.5 focus:outline-none"
+                  title="Switch Active Role"
+                >
+                  <option value="ADMIN">ADMIN</option>
+                  <option value="CONTROLLER">CTRL</option>
+                  <option value="EVALUATOR">EVAL</option>
+                </select>
+
+                <button
+                  onClick={logout}
+                  title="Sign out of scoring console"
+                  className="p-1 text-slate-400 hover:text-rose-400 hover:bg-rose-950/40 rounded transition"
+                >
+                  <LogOut className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            )}
           </div>
 
         </div>
 
-        {/* Navigation Tabs (Shown in Operator Mode) */}
+        {/* Navigation Tabs (Shown in Operator Mode, filtered by User Role) */}
         {!isDisplayMode && (
           <div className="flex items-center space-x-1 sm:space-x-2 overflow-x-auto py-2 border-t border-slate-800/80 no-scrollbar text-xs sm:text-sm">
-            {[
-              { id: 'dashboard', label: '1. Dashboard' },
-              { id: 'live_control', label: '2. Live Control & Queue' },
-              { id: 'schools', label: '3. Schools / Teams' },
-              { id: 'round_1', label: '4. Round 1: Block Push' },
-              { id: 'round_2', label: '5. Round 2: Block Pull' },
-              { id: 'round_3', label: '6. Round 3: Robot War' },
-              { id: 'leaderboard', label: '7. Leaderboard' },
-              { id: 'score_history', label: '8. Score History' },
-              { id: 'display_view', label: '9. Display Mode' },
-              { id: 'settings', label: '10. Settings & Rules' },
-            ].map((tab) => (
+            {visibleTabs.map((tab) => (
               <button
                 key={tab.id}
                 onClick={() => setActiveTab(tab.id)}

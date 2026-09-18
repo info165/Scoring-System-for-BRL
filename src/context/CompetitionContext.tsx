@@ -9,7 +9,12 @@ import {
   PublicDisplayState,
   LeaderboardFilter,
   AuditLogEntry,
-  PitType
+  PitType,
+  ArenaTimerState,
+  PublishedRunResult,
+  ActiveRunState,
+  PushBlockStatus,
+  AppUser
 } from '../types';
 import { INITIAL_DEMO_SCHOOLS, INITIAL_PRESET_MATCHES } from '../data/demoSchools';
 import { 
@@ -71,6 +76,7 @@ interface CompetitionContextType {
   // Scoring Operations
   saveBlockPushDraft: (schoolId: string, scoreData: BlockPushScore) => void;
   publishBlockPushScore: (schoolId: string, scoreData: Omit<BlockPushScore, 'isDraft' | 'publishedAt'>) => void;
+  discardDraftRun: (schoolId: string, round?: 1 | 2) => void;
   
   saveBlockPullDraft: (schoolId: string, scoreData: BlockPullScore) => void;
   publishBlockPullScore: (schoolId: string, scoreData: Omit<BlockPullScore, 'isDraft' | 'publishedAt'>) => void;
@@ -106,12 +112,59 @@ interface CompetitionContextType {
   isDisplayMode: boolean;
   setIsDisplayMode: (val: boolean) => void;
 
+  // Live Arena Timer Synchronization
+  arenaTimer: ArenaTimerState;
+  startArenaTimer: (round?: 1 | 2 | 3, schoolId?: string, duration?: number) => void;
+  stopArenaTimer: (explicitTimeLeft?: number) => void;
+  resetArenaTimer: (duration?: number) => void;
+
+  // Authoritative Active Run Controls (synced across controller, evaluator, and display)
+  startActiveRun: (schoolId?: string, round?: 1 | 2 | 3, user?: AppUser) => void;
+  updateActiveRunBlock: (weightId: string, status: PushBlockStatus, user?: AppUser) => void;
+  stopActiveRun: (user?: AppUser, explicitTimeLeft?: number) => void;
+  restartActiveRun: (schoolId?: string, round?: 1 | 2 | 3, user?: AppUser) => void;
+  unlockActiveRunReview: () => void;
+
   // Cloud & Firebase Real-time Sync
   isFirebaseConnected: boolean;
   isFirebaseSyncing: boolean;
   lastCloudSync: string | null;
   forceCloudSync: () => Promise<void>;
 }
+
+export const DEFAULT_ACTIVE_RUN: ActiveRunState = {
+  status: 'READY',
+  round: 1,
+  schoolId: null,
+  timeAllocated: 120,
+  timeLeftSeconds: 120,
+  timeBonus: 0,
+  blockScore: 0,
+  finalScore: 0,
+  startTimestamp: null,
+  stopTimestamp: null,
+  blocks: {
+    '200g': 'none',
+    '500g': 'none',
+    '700g': 'none',
+    '1kg': 'none',
+    '2kg': 'none',
+    '4kg': 'none'
+  },
+  operatorNotes: '',
+  isLockedForReview: false,
+  manualTimeBonus: null
+};
+
+export const DEFAULT_ARENA_TIMER: ArenaTimerState = {
+  status: 'idle',
+  totalDurationSeconds: 120,
+  remainingSeconds: 120,
+  startTimestamp: null,
+  stopTimestamp: null,
+  round: 1,
+  schoolId: null
+};
 
 // Initial demo score records pre-calculated with the official BRL 2026 rules
 const samplePushDPS = calculateBlockPushScore(
@@ -343,6 +396,9 @@ const defaultInitialState: CompetitionState = {
       newScore: 120
     }
   ],
+  arenaTimer: DEFAULT_ARENA_TIMER,
+  activeRun: DEFAULT_ACTIVE_RUN,
+  lastPublishedResult: null,
   lastUpdated: 0
 };
 
@@ -716,8 +772,46 @@ export const CompetitionProvider: React.FC<{ children: React.ReactNode }> = ({ c
         : `Next Team advanced (${currentSchoolObj?.name || 'previous team'} skipped without a score, returned to end of queue): Now playing is ${nextSchoolObj?.name || 'End of Queue'}`
     };
 
+    const nextArenaTimer: ArenaTimerState = {
+      status: 'idle',
+      totalDurationSeconds: 120,
+      remainingSeconds: 120,
+      startTimestamp: null,
+      stopTimestamp: null,
+      round: state.currentRound,
+      schoolId: nextCurrent
+    };
+
+    const nextActiveRun: ActiveRunState = {
+      status: 'READY',
+      round: state.currentRound,
+      schoolId: nextCurrent,
+      timeAllocated: 120,
+      timeLeftSeconds: 120,
+      timeBonus: 0,
+      blockScore: 0,
+      finalScore: 0,
+      startTimestamp: null,
+      stopTimestamp: null,
+      blocks: {
+        '200g': 'none',
+        '500g': 'none',
+        '700g': 'none',
+        '1kg': 'none',
+        '2kg': 'none',
+        '4kg': 'none'
+      },
+      operatorNotes: '',
+      isLockedForReview: false,
+      manualTimeBonus: null,
+      stoppedBy: undefined
+    };
+
     commitState({
       ...state,
+      displayState: 'live_run',
+      lastPublishedResult: null,
+      activeRun: nextActiveRun,
       runQueue: {
         ...state.runQueue,
         [roundKey]: {
@@ -726,6 +820,7 @@ export const CompetitionProvider: React.FC<{ children: React.ReactNode }> = ({ c
           completedSchoolIds: newCompleted
         }
       },
+      arenaTimer: nextArenaTimer,
       auditLogs: [log, ...state.auditLogs.slice(0, 49)],
       lastUpdated: Date.now()
     });
@@ -796,11 +891,20 @@ export const CompetitionProvider: React.FC<{ children: React.ReactNode }> = ({ c
     const school = state.schools.find(s => s.id === schoolId);
     const existing = state.scores[schoolId];
     const oldScore = (existing?.round1 && !existing.round1.isDraft) ? existing.round1.finalScore : 0;
+    const nowIso = new Date().toISOString();
     
     const publishedScore: BlockPushScore = {
       ...scoreData,
+      timeAllocatedSeconds: 120,
+      timeUsedSeconds: Math.max(0, 120 - scoreData.timeLeftSeconds),
+      publicationStatus: 'PUBLISHED',
       isDraft: false,
-      publishedAt: new Date().toISOString()
+      publishedAt: nowIso,
+      eventName: state.eventName || 'Bharat Robotics League',
+      year: state.year || '2026',
+      schoolName: school?.name,
+      teamName: school?.teamName,
+      teamNumber: school?.teamNumber
     };
 
     const r2 = (existing?.round2 && !existing.round2.isDraft) ? existing.round2.finalScore : 0;
@@ -821,8 +925,42 @@ export const CompetitionProvider: React.FC<{ children: React.ReactNode }> = ({ c
       operatorNote: publishedScore.notes
     };
 
+    const publishedResult: PublishedRunResult = {
+      round: 1,
+      schoolId,
+      schoolName: school?.name || 'Unknown School',
+      teamName: school?.teamName || 'Unknown Team',
+      teamNumber: school?.teamNumber || '',
+      city: school?.city || '',
+      eventName: state.eventName || 'Bharat Robotics League',
+      year: state.year || '2026',
+      timeAllocated: 120,
+      timeLeft: publishedScore.timeLeftSeconds,
+      timeUsed: Math.max(0, 120 - publishedScore.timeLeftSeconds),
+      timeBonus: publishedScore.timeBonus,
+      penaltyPoints: 0,
+      blockScore: publishedScore.blockScore,
+      finalScore: publishedScore.finalScore,
+      publicationStatus: 'PUBLISHED',
+      publishedAt: nowIso,
+      blocks: publishedScore.blocks
+    };
+
+    const publishedRun: ActiveRunState = {
+      ...(state.activeRun || DEFAULT_ACTIVE_RUN),
+      status: 'PUBLISHED',
+      finalScore: publishedScore.finalScore,
+      blockScore: publishedScore.blockScore,
+      timeBonus: publishedScore.timeBonus,
+      timeLeftSeconds: publishedScore.timeLeftSeconds,
+      isLockedForReview: true
+    };
+
     commitState({
       ...state,
+      displayState: 'result_reveal',
+      lastPublishedResult: publishedResult,
+      activeRun: publishedRun,
       scores: {
         ...state.scores,
         [schoolId]: {
@@ -836,6 +974,64 @@ export const CompetitionProvider: React.FC<{ children: React.ReactNode }> = ({ c
       auditLogs: [log, ...state.auditLogs.slice(0, 49)],
       lastUpdated: Date.now()
     });
+  }, [state, commitState]);
+
+  // Discard draft run without writing to database or creating audit records
+  const discardDraftRun = useCallback((schoolId: string, round: 1 | 2 = 1) => {
+    const existing = state.scores[schoolId];
+    const roundKey = round === 1 ? 'round1' : 'round2';
+    const currentScore = existing ? existing[roundKey] : null;
+
+    let updatedScores = { ...state.scores };
+    if (currentScore && currentScore.isDraft) {
+      updatedScores[schoolId] = {
+        ...existing,
+        [roundKey]: null
+      };
+    }
+
+    const resetTimer: ArenaTimerState = {
+      status: 'idle',
+      totalDurationSeconds: 120,
+      remainingSeconds: 120,
+      startTimestamp: null,
+      stopTimestamp: null,
+      round: state.currentRound,
+      schoolId
+    };
+
+    const resetRun: ActiveRunState = {
+      status: 'READY',
+      round: state.currentRound,
+      schoolId,
+      timeAllocated: 120,
+      timeLeftSeconds: 120,
+      timeBonus: 0,
+      blockScore: 0,
+      finalScore: 0,
+      startTimestamp: null,
+      stopTimestamp: null,
+      blocks: {
+        '200g': 'none',
+        '500g': 'none',
+        '700g': 'none',
+        '1kg': 'none',
+        '2kg': 'none',
+        '4kg': 'none'
+      },
+      operatorNotes: '',
+      isLockedForReview: false,
+      manualTimeBonus: null,
+      stoppedBy: undefined
+    };
+
+    commitState({
+      ...state,
+      scores: updatedScores,
+      arenaTimer: resetTimer,
+      activeRun: resetRun,
+      lastUpdated: Date.now()
+    }, false);
   }, [state, commitState]);
 
   // Round 2 (Block Pull) - Draft vs Publish
@@ -1330,6 +1526,379 @@ export const CompetitionProvider: React.FC<{ children: React.ReactNode }> = ({ c
     commitState(previous, false);
   }, [historyStack, commitState]);
 
+  // Arena Timer Synchronization Callbacks
+  const startArenaTimer = useCallback((round: 1 | 2 | 3 = state.currentRound, schoolId?: string, duration: number = 120) => {
+    const startTimestamp = Date.now();
+    const newTimer: ArenaTimerState = {
+      status: 'running',
+      totalDurationSeconds: duration,
+      remainingSeconds: duration,
+      startTimestamp,
+      stopTimestamp: null,
+      round,
+      schoolId: schoolId || currentSchool?.id || null
+    };
+    commitState({
+      ...state,
+      arenaTimer: newTimer,
+      lastUpdated: Date.now()
+    }, false);
+  }, [state, commitState, currentSchool]);
+
+  const stopArenaTimer = useCallback((explicitTimeLeft?: number) => {
+    if (!state.arenaTimer) return;
+    const now = Date.now();
+    let frozen: number;
+    if (typeof explicitTimeLeft === 'number') {
+      frozen = Math.max(0, Math.min(state.arenaTimer.totalDurationSeconds || 120, explicitTimeLeft));
+    } else {
+      const start = state.arenaTimer.startTimestamp || now;
+      const elapsed = Math.floor((now - start) / 1000);
+      frozen = Math.max(0, (state.arenaTimer.totalDurationSeconds || 120) - elapsed);
+    }
+    const newTimer: ArenaTimerState = {
+      ...state.arenaTimer,
+      status: 'stopped',
+      remainingSeconds: frozen,
+      stopTimestamp: now
+    };
+    commitState({
+      ...state,
+      arenaTimer: newTimer,
+      lastUpdated: Date.now()
+    }, false);
+  }, [state, commitState]);
+
+  const resetArenaTimer = useCallback((duration: number = 120) => {
+    const newTimer: ArenaTimerState = {
+      status: 'idle',
+      totalDurationSeconds: duration,
+      remainingSeconds: duration,
+      startTimestamp: null,
+      stopTimestamp: null,
+      round: state.currentRound,
+      schoolId: currentSchool?.id || null
+    };
+    commitState({
+      ...state,
+      arenaTimer: newTimer,
+      lastUpdated: Date.now()
+    }, false);
+  }, [state, commitState, currentSchool]);
+
+  // Synchronized Active Run Controls
+  const startActiveRun = useCallback((schoolId?: string, round: 1 | 2 | 3 = 1, user?: AppUser) => {
+    const roundKey: 1 | 2 = (round === 3 ? 1 : round) as 1 | 2;
+    const targetSchoolId = schoolId || state.runQueue[roundKey]?.currentSchoolId || state.schools[0]?.id || null;
+    const school = state.schools.find(s => s.id === targetSchoolId);
+    const startTimestamp = Date.now();
+
+    const newActiveRun: ActiveRunState = {
+      status: 'RUNNING',
+      round,
+      schoolId: targetSchoolId,
+      timeAllocated: 120,
+      timeLeftSeconds: 120,
+      timeBonus: 0,
+      blockScore: 0,
+      finalScore: 0,
+      startTimestamp,
+      stopTimestamp: null,
+      blocks: {
+        '200g': 'none',
+        '500g': 'none',
+        '700g': 'none',
+        '1kg': 'none',
+        '2kg': 'none',
+        '4kg': 'none'
+      },
+      operatorNotes: '',
+      isLockedForReview: false,
+      manualTimeBonus: null,
+      stoppedBy: undefined
+    };
+
+    const newTimer: ArenaTimerState = {
+      status: 'running',
+      totalDurationSeconds: 120,
+      remainingSeconds: 120,
+      startTimestamp,
+      stopTimestamp: null,
+      round,
+      schoolId: targetSchoolId
+    };
+
+    const log: AuditLogEntry = {
+      id: `log_${Date.now()}`,
+      timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+      round,
+      schoolName: school?.name || 'Current Team',
+      teamName: school?.teamName || '',
+      action: `RUN STARTED (120s timer active)`,
+      userEmail: user?.email,
+      userName: user?.displayName,
+      userRole: user?.role
+    };
+
+    commitState({
+      ...state,
+      activeRun: newActiveRun,
+      arenaTimer: newTimer,
+      displayState: 'live_run',
+      auditLogs: [log, ...state.auditLogs.slice(0, 49)],
+      lastUpdated: Date.now()
+    });
+  }, [state, commitState]);
+
+  const updateActiveRunBlock = useCallback((weightId: string, status: PushBlockStatus) => {
+    const currentRun = state.activeRun || DEFAULT_ACTIVE_RUN;
+    const updatedBlocks = {
+      ...currentRun.blocks,
+      [weightId]: status
+    };
+
+    const newBlockScore = OFFICIAL_BLOCK_WEIGHTS.reduce((sum, def) => {
+      const st = updatedBlocks[def.id] || 'none';
+      if (st === 'complete') return sum + def.fullPoints;
+      if (st === 'incomplete') return sum + def.incompletePoints;
+      return sum;
+    }, 0);
+
+    const bonus = currentRun.status === 'STOPPED' 
+      ? currentRun.timeBonus 
+      : (currentRun.status === 'RUNNING' ? currentRun.timeLeftSeconds : 0);
+    const newFinalScore = newBlockScore + bonus;
+
+    const updatedRun: ActiveRunState = {
+      ...currentRun,
+      blocks: updatedBlocks,
+      blockScore: newBlockScore,
+      finalScore: newFinalScore
+    };
+
+    let updatedScores = { ...state.scores };
+    if (currentRun.schoolId) {
+      const existing = updatedScores[currentRun.schoolId] || {
+        schoolId: currentRun.schoolId,
+        round1: null,
+        round2: null,
+        round3Score: 0,
+        totalScore: 0
+      };
+
+      updatedScores[currentRun.schoolId] = {
+        ...existing,
+        round1: {
+          blocks: OFFICIAL_BLOCK_WEIGHTS.map(def => ({
+            weightId: def.id,
+            weightLabel: def.label,
+            status: updatedBlocks[def.id] || 'none',
+            pointsEarned: (updatedBlocks[def.id] === 'complete' ? def.fullPoints : (updatedBlocks[def.id] === 'incomplete' ? def.incompletePoints : 0))
+          })),
+          blockScore: newBlockScore,
+          timeLeftSeconds: currentRun.timeLeftSeconds,
+          timeBonus: bonus,
+          finalScore: newFinalScore,
+          calculatedScore: newFinalScore,
+          isDraft: true,
+          notes: currentRun.operatorNotes
+        }
+      };
+    }
+
+    commitState({
+      ...state,
+      activeRun: updatedRun,
+      scores: updatedScores,
+      lastUpdated: Date.now()
+    }, false);
+  }, [state, commitState]);
+
+  const stopActiveRun = useCallback((user?: AppUser, explicitTimeLeft?: number) => {
+    const currentRun = state.activeRun || DEFAULT_ACTIVE_RUN;
+    const now = Date.now();
+    let frozenSeconds: number;
+
+    if (typeof explicitTimeLeft === 'number') {
+      frozenSeconds = Math.max(0, Math.min(120, explicitTimeLeft));
+    } else if (currentRun.startTimestamp) {
+      const elapsed = Math.floor((now - currentRun.startTimestamp) / 1000);
+      frozenSeconds = Math.max(0, 120 - elapsed);
+    } else {
+      frozenSeconds = currentRun.timeLeftSeconds || 0;
+    }
+
+    const bonus = frozenSeconds;
+    const totalScore = currentRun.blockScore + bonus;
+
+    const stoppedRun: ActiveRunState = {
+      ...currentRun,
+      status: 'STOPPED',
+      timeLeftSeconds: frozenSeconds,
+      timeBonus: bonus,
+      finalScore: totalScore,
+      stopTimestamp: now,
+      isLockedForReview: true,
+      stoppedBy: user ? {
+        email: user.email,
+        displayName: user.displayName,
+        role: user.role
+      } : undefined
+    };
+
+    const stoppedTimer: ArenaTimerState = {
+      status: 'stopped',
+      totalDurationSeconds: 120,
+      remainingSeconds: frozenSeconds,
+      startTimestamp: currentRun.startTimestamp,
+      stopTimestamp: now,
+      round: currentRun.round,
+      schoolId: currentRun.schoolId
+    };
+
+    const school = state.schools.find(s => s.id === currentRun.schoolId);
+
+    const log: AuditLogEntry = {
+      id: `log_${Date.now()}`,
+      timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+      round: currentRun.round,
+      schoolName: school?.name || 'Current Team',
+      teamName: school?.teamName || '',
+      action: `RUN STOPPED: ${frozenSeconds}s remaining (+${bonus} bonus). Score: ${totalScore} pts`,
+      newScore: totalScore,
+      userEmail: user?.email,
+      userName: user?.displayName,
+      userRole: user?.role
+    };
+
+    let updatedScores = { ...state.scores };
+    if (currentRun.schoolId) {
+      const existing = updatedScores[currentRun.schoolId] || {
+        schoolId: currentRun.schoolId,
+        round1: null,
+        round2: null,
+        round3Score: 0,
+        totalScore: 0
+      };
+
+      updatedScores[currentRun.schoolId] = {
+        ...existing,
+        round1: {
+          blocks: OFFICIAL_BLOCK_WEIGHTS.map(def => ({
+            weightId: def.id,
+            weightLabel: def.label,
+            status: currentRun.blocks[def.id] || 'none',
+            pointsEarned: (currentRun.blocks[def.id] === 'complete' ? def.fullPoints : (currentRun.blocks[def.id] === 'incomplete' ? def.incompletePoints : 0))
+          })),
+          blockScore: currentRun.blockScore,
+          timeLeftSeconds: frozenSeconds,
+          timeBonus: bonus,
+          finalScore: totalScore,
+          calculatedScore: totalScore,
+          isDraft: true,
+          notes: currentRun.operatorNotes
+        }
+      };
+    }
+
+    commitState({
+      ...state,
+      activeRun: stoppedRun,
+      arenaTimer: stoppedTimer,
+      scores: updatedScores,
+      auditLogs: [log, ...state.auditLogs.slice(0, 49)],
+      lastUpdated: Date.now()
+    });
+  }, [state, commitState]);
+
+  const restartActiveRun = useCallback((schoolId?: string, round: 1 | 2 | 3 = 1, user?: AppUser) => {
+    const roundKey: 1 | 2 = (round === 3 ? 1 : round) as 1 | 2;
+    const targetSchoolId = schoolId || state.runQueue[roundKey]?.currentSchoolId || state.schools[0]?.id || null;
+    const school = state.schools.find(s => s.id === targetSchoolId);
+
+    const resetRun: ActiveRunState = {
+      status: 'READY',
+      round,
+      schoolId: targetSchoolId,
+      timeAllocated: 120,
+      timeLeftSeconds: 120,
+      timeBonus: 0,
+      blockScore: 0,
+      finalScore: 0,
+      startTimestamp: null,
+      stopTimestamp: null,
+      blocks: {
+        '200g': 'none',
+        '500g': 'none',
+        '700g': 'none',
+        '1kg': 'none',
+        '2kg': 'none',
+        '4kg': 'none'
+      },
+      operatorNotes: '',
+      isLockedForReview: false,
+      manualTimeBonus: null,
+      stoppedBy: undefined
+    };
+
+    const resetTimer: ArenaTimerState = {
+      status: 'idle',
+      totalDurationSeconds: 120,
+      remainingSeconds: 120,
+      startTimestamp: null,
+      stopTimestamp: null,
+      round,
+      schoolId: targetSchoolId
+    };
+
+    let updatedScores = { ...state.scores };
+    if (targetSchoolId && updatedScores[targetSchoolId]) {
+      const existing = updatedScores[targetSchoolId];
+      if (existing.round1?.isDraft) {
+        updatedScores[targetSchoolId] = {
+          ...existing,
+          round1: null,
+          totalScore: (existing.round2?.finalScore || 0) + existing.round3Score
+        };
+      }
+    }
+
+    const log: AuditLogEntry = {
+      id: `log_${Date.now()}`,
+      timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+      round,
+      schoolName: school?.name || 'Current Team',
+      teamName: school?.teamName || '',
+      action: `RUN RESTARTED: Draft discarded, timer reset to 01:20`,
+      userEmail: user?.email,
+      userName: user?.displayName,
+      userRole: user?.role
+    };
+
+    commitState({
+      ...state,
+      activeRun: resetRun,
+      arenaTimer: resetTimer,
+      scores: updatedScores,
+      auditLogs: [log, ...state.auditLogs.slice(0, 49)],
+      lastUpdated: Date.now()
+    });
+  }, [state, commitState]);
+
+  const unlockActiveRunReview = useCallback(() => {
+    if (!state.activeRun) return;
+    commitState({
+      ...state,
+      activeRun: {
+        ...state.activeRun,
+        isLockedForReview: false
+      },
+      lastUpdated: Date.now()
+    }, false);
+  }, [state, commitState]);
+
+  const arenaTimerValue = state.arenaTimer || DEFAULT_ARENA_TIMER;
+
   return (
     <CompetitionContext.Provider
       value={{
@@ -1351,6 +1920,7 @@ export const CompetitionProvider: React.FC<{ children: React.ReactNode }> = ({ c
         reorderQueue,
         saveBlockPushDraft,
         publishBlockPushScore,
+        discardDraftRun,
         saveBlockPullDraft,
         publishBlockPullScore,
         createRobotWarMatch,
@@ -1374,6 +1944,15 @@ export const CompetitionProvider: React.FC<{ children: React.ReactNode }> = ({ c
         canUndo: historyStack.length > 0,
         isDisplayMode,
         setIsDisplayMode,
+        arenaTimer: arenaTimerValue,
+        startArenaTimer,
+        stopArenaTimer,
+        resetArenaTimer,
+        startActiveRun,
+        updateActiveRunBlock,
+        stopActiveRun,
+        restartActiveRun,
+        unlockActiveRunReview,
         isFirebaseConnected,
         isFirebaseSyncing,
         lastCloudSync,

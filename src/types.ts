@@ -4,6 +4,7 @@ export type PublicDisplayState =
   | 'welcome' 
   | 'current_round' 
   | 'live_run' 
+  | 'result_reveal'
   | 'leaderboard' 
   | 'robot_war' 
   | 'winner';
@@ -33,14 +34,55 @@ export interface BlockPushBlockEntry {
 export interface BlockPushScore {
   blocks: BlockPushBlockEntry[];
   blockScore: number;
+  timeAllocatedSeconds?: number; // 120
+  timeUsedSeconds?: number; // 120 - timeLeftSeconds
   timeLeftSeconds: number; // 0 to 120s
   timeBonus: number; // 1 pt per unused sec
   finalScore: number; // blockScore + timeBonus
   calculatedScore: number; // backwards compatibility alias for finalScore
   penaltyPoints?: number; // 0 in official push rules
   isDraft: boolean;
+  publicationStatus?: 'DRAFT' | 'PUBLISHED';
   publishedAt?: string;
   notes?: string;
+  eventName?: string;
+  year?: string;
+  schoolName?: string;
+  teamName?: string;
+  teamNumber?: string;
+}
+
+export interface PublishedRunResult {
+  round: 1 | 2 | 3;
+  schoolId: string;
+  schoolName: string;
+  teamName: string;
+  teamNumber: string;
+  city: string;
+  eventName: string;
+  year: string;
+  timeAllocated: number; // 120
+  timeLeft: number; // e.g. 45
+  timeUsed: number; // 120 - 45 = 75
+  timeBonus: number; // 45
+  penaltyPoints: number; // 0
+  blockScore: number; // e.g. 70
+  finalScore: number; // 115
+  publicationStatus: 'PUBLISHED';
+  publishedAt: string;
+  blocks?: BlockPushBlockEntry[];
+  round2Details?: {
+    pulledBlocks: string[];
+    boundaryTouches: number;
+    boundaryPenalty: number;
+  };
+  round3Details?: {
+    teamAName: string;
+    teamBName: string;
+    winnerName: string;
+    pitType?: PitType | null;
+    multiplier?: number | null;
+  };
 }
 
 // --- ROUND 2: BLOCK PULL CHALLENGE ---
@@ -89,6 +131,42 @@ export interface TeamScoreRecord {
   totalScore: number;
 }
 
+export type UserRole = 'ADMIN' | 'CONTROLLER' | 'EVALUATOR';
+
+export interface AppUser {
+  uid: string;
+  email: string;
+  displayName: string;
+  role: UserRole;
+  createdAt?: string;
+  lastLogin?: string;
+  isActive?: boolean;
+}
+
+export type RunStatus = 'READY' | 'RUNNING' | 'STOPPED' | 'PUBLISHED';
+
+export interface ActiveRunState {
+  status: RunStatus;
+  round: 1 | 2 | 3;
+  schoolId: string | null;
+  timeAllocated: number; // 120
+  timeLeftSeconds: number; // 120 down to 0
+  timeBonus: number;
+  blockScore: number;
+  finalScore: number;
+  startTimestamp: number | null; // epoch ms
+  stopTimestamp: number | null; // epoch ms
+  blocks: Record<string, PushBlockStatus>;
+  operatorNotes: string;
+  isLockedForReview: boolean;
+  manualTimeBonus: number | null;
+  stoppedBy?: {
+    email: string;
+    displayName: string;
+    role: string;
+  };
+}
+
 export interface RunQueue {
   currentSchoolId: string | null;
   queueSchoolIds: string[]; // upcoming
@@ -105,10 +183,25 @@ export interface AuditLogEntry {
   oldScore?: number | null;
   newScore?: number;
   operatorNote?: string;
+  userEmail?: string;
+  userName?: string;
+  userRole?: string;
   details?: Record<string, any>;
 }
 
 export type LeaderboardFilter = 'all' | 1 | 2 | 3;
+
+export type ArenaTimerStatus = 'idle' | 'running' | 'stopped' | 'time_over';
+
+export interface ArenaTimerState {
+  status: ArenaTimerStatus;
+  totalDurationSeconds: number; // 120
+  remainingSeconds: number; // 120 down to 0
+  startTimestamp: number | null; // epoch ms
+  stopTimestamp: number | null; // epoch ms
+  round: 1 | 2 | 3;
+  schoolId: string | null;
+}
 
 export interface CompetitionState {
   eventName: string;
@@ -125,5 +218,8 @@ export interface CompetitionState {
   scores: Record<string, TeamScoreRecord>; // keyed by schoolId
   robotWarMatches: RobotWarMatch[];
   auditLogs: AuditLogEntry[];
+  arenaTimer?: ArenaTimerState;
+  activeRun?: ActiveRunState;
+  lastPublishedResult?: PublishedRunResult | null;
   lastUpdated: number;
 }

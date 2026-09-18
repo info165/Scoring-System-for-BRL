@@ -87,6 +87,20 @@
         "createdAt": { "type": "number" }
       },
       "required": ["id", "timestamp", "action"]
+    },
+    "User": {
+      "title": "User",
+      "description": "Authorized tournament operators, controllers, and evaluators",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string" },
+        "email": { "type": "string" },
+        "displayName": { "type": "string" },
+        "role": { "type": "string", "enum": ["ADMIN", "CONTROLLER", "EVALUATOR"] },
+        "createdAt": { "type": "string" },
+        "isActive": { "type": "boolean" }
+      },
+      "required": ["uid", "email", "displayName", "role"]
     }
   },
   "firestore": {
@@ -109,6 +123,10 @@
     "/auditLogs/{logId}": {
       "schema": { "$ref": "#/entities/AuditLog" },
       "description": "Integrity audit trail entries"
+    },
+    "/users/{userId}": {
+      "schema": { "$ref": "#/entities/User" },
+      "description": "Authorized tournament operators and evaluators"
     }
   }
 }

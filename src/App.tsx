@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { CompetitionProvider, useCompetition } from './context/CompetitionContext';
+import { AuthProvider, useAuth } from './context/AuthContext';
 import { Header } from './components/common/Header';
 import { DashboardView } from './components/operator/DashboardView';
 import { LiveControlView } from './components/operator/LiveControlView';
@@ -10,11 +11,15 @@ import { Round3RobotWarView } from './components/operator/Round3RobotWarView';
 import { LeaderboardView } from './components/operator/LeaderboardView';
 import { ScoreHistoryView } from './components/operator/ScoreHistoryView';
 import { SettingsView } from './components/operator/SettingsView';
+import { UserManagementView } from './components/operator/UserManagementView';
+import { LoginPage } from './components/auth/LoginPage';
 import { PublicDisplay } from './components/display/PublicDisplay';
 import { WinnerScreen } from './components/display/WinnerScreen';
+import { ShieldAlert } from 'lucide-react';
 
 function MainCompetitionApp() {
   const { state, setDisplayState } = useCompetition();
+  const { isAuthenticated, userRole, isLoading, currentUser } = useAuth();
 
   // Determine initial view from URL query param or hash (e.g. ?mode=display or #display)
   const [activeView, setActiveView] = useState<'operator' | 'display'>(() => {
@@ -44,12 +49,33 @@ function MainCompetitionApp() {
     }
   };
 
-  // If public display is active, render the dedicated public display screen
+  // If public display is active, render the dedicated public display screen WITHOUT requiring auth
   if (activeView === 'display') {
     return (
       <PublicDisplay 
         onSwitchToOperator={() => handleSwitchView('operator')} 
       />
+    );
+  }
+
+  // Operator Auth Guard
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-slate-950 flex flex-col items-center justify-center text-white p-6">
+        <img 
+          src="/brl-logo.png" 
+          alt="BRL Logo" 
+          className="w-16 h-16 object-contain animate-pulse mb-4 drop-shadow-[0_0_15px_rgba(245,158,11,0.4)]" 
+        />
+        <h2 className="text-lg font-display font-bold text-amber-400">BHARAT ROBOTICS LEAGUE 2026</h2>
+        <p className="text-xs text-slate-400 font-mono mt-1">Verifying official credentials & role security...</p>
+      </div>
+    );
+  }
+
+  if (!isAuthenticated) {
+    return (
+      <LoginPage onOpenDisplay={() => handleSwitchView('display')} />
     );
   }
 
@@ -70,11 +96,19 @@ function MainCompetitionApp() {
         )}
 
         {activeTab === 'live_control' && (
-          <LiveControlView setActiveTab={setActiveTab} />
+          userRole === 'EVALUATOR' ? (
+            <RestrictedView role={userRole} neededRole="CONTROLLER or ADMIN" onRedirect={() => setActiveTab('round_1')} />
+          ) : (
+            <LiveControlView setActiveTab={setActiveTab} />
+          )
         )}
 
         {activeTab === 'schools' && (
-          <SchoolsView />
+          userRole === 'EVALUATOR' ? (
+            <RestrictedView role={userRole} neededRole="CONTROLLER or ADMIN" onRedirect={() => setActiveTab('round_1')} />
+          ) : (
+            <SchoolsView />
+          )
         )}
 
         {activeTab === 'round_1' && (
@@ -95,12 +129,47 @@ function MainCompetitionApp() {
           />
         )}
 
-        {activeTab === 'history' && (
+        {(activeTab === 'history' || activeTab === 'score_history') && (
           <ScoreHistoryView />
         )}
 
+        {activeTab === 'display_view' && (
+          <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 text-center max-w-xl mx-auto space-y-4">
+            <h3 className="text-lg font-display font-bold text-white">Arena Secondary Public Display</h3>
+            <p className="text-xs text-slate-400">
+              Launch the synchronized public arena view in full screen mode for projector or audience screens.
+            </p>
+            <div className="flex justify-center gap-3">
+              <button
+                onClick={() => handleSwitchView('display')}
+                className="px-4 py-2.5 bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold rounded-xl text-xs transition"
+              >
+                Switch to Display View
+              </button>
+              <button
+                onClick={() => window.open(`${window.location.origin}${window.location.pathname}?mode=display`, '_blank')}
+                className="px-4 py-2.5 bg-slate-800 hover:bg-slate-700 text-cyan-300 font-semibold rounded-xl text-xs border border-cyan-500/40 transition"
+              >
+                Open in New Tab (HDMI Screen)
+              </button>
+            </div>
+          </div>
+        )}
+
+        {activeTab === 'users' && (
+          userRole !== 'ADMIN' ? (
+            <RestrictedView role={userRole} neededRole="ADMIN" onRedirect={() => setActiveTab('dashboard')} />
+          ) : (
+            <UserManagementView />
+          )
+        )}
+
         {activeTab === 'settings' && (
-          <SettingsView />
+          userRole !== 'ADMIN' ? (
+            <RestrictedView role={userRole} neededRole="ADMIN" onRedirect={() => setActiveTab('dashboard')} />
+          ) : (
+            <SettingsView />
+          )
         )}
       </main>
 
@@ -136,10 +205,32 @@ function MainCompetitionApp() {
   );
 }
 
+function RestrictedView({ role, neededRole, onRedirect }: { role: string | null; neededRole: string; onRedirect: () => void }) {
+  return (
+    <div className="bg-slate-900 border border-slate-800 rounded-2xl p-8 text-center max-w-lg mx-auto space-y-4 shadow-xl my-10">
+      <div className="w-12 h-12 rounded-2xl bg-amber-500/10 border border-amber-500/30 flex items-center justify-center mx-auto text-amber-400">
+        <ShieldAlert className="w-6 h-6" />
+      </div>
+      <h3 className="text-lg font-display font-bold text-white">Restricted Operator Area</h3>
+      <p className="text-xs text-slate-400 leading-relaxed">
+        Your current role (<strong className="text-amber-400">{role || 'GUEST'}</strong>) does not have permission to access this view. This section requires <strong className="text-cyan-300">{neededRole}</strong> privileges.
+      </p>
+      <button
+        onClick={onRedirect}
+        className="px-4 py-2 bg-amber-500 hover:bg-amber-400 text-slate-950 text-xs font-bold rounded-xl transition"
+      >
+        Return to Permitted Console
+      </button>
+    </div>
+  );
+}
+
 export default function App() {
   return (
-    <CompetitionProvider>
-      <MainCompetitionApp />
-    </CompetitionProvider>
+    <AuthProvider>
+      <CompetitionProvider>
+        <MainCompetitionApp />
+      </CompetitionProvider>
+    </AuthProvider>
   );
 }

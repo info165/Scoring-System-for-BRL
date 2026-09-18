@@ -1,11 +1,12 @@
 {
   "projectId": "scoring-system-for-brl",
-  "appId": "1:250878368107:web:a3723919760e29191ad42e",
+  "appId": "1:250878368107:web:d858009732d785f91ad42e",
   "apiKey": "AIzaSyDrAizbQaOKbpLIYyeuev-AGEpS99o7F2M",
   "authDomain": "scoring-system-for-brl.firebaseapp.com",
-  "firestoreDatabaseId": "(default)",
+  "firestoreDatabaseId": "ai-studio-bharatroboticsle-03ff8178-f906-4ef7-8a85-ec2ecee704e9",
   "storageBucket": "scoring-system-for-brl.firebasestorage.app",
   "messagingSenderId": "250878368107",
   "measurementId": "",
+  "oAuthClientId": "250878368107-bog2k5qmhj7878ki37lfki0tt9r4g2nq.apps.googleusercontent.com",
   "recaptchaSiteKey": ""
 }

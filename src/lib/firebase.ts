@@ -16,7 +16,8 @@ import {
   User 
 } from 'firebase/auth';
 import firebaseConfigData from '../../firebase-applet-config.json';
-import { CompetitionState } from '../types';
+import { CompetitionState, AppUser, ActiveRunState, AuditLogEntry } from '../types';
+import { getDocs, deleteDoc, updateDoc } from 'firebase/firestore';
 
 export const firebaseConfig = {
   projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID || firebaseConfigData.projectId,
@@ -157,3 +158,67 @@ export async function fetchCompetitionStateFromFirestore(): Promise<CompetitionS
   }
   return null;
 }
+
+/**
+ * Fetch a user profile from Firestore
+ */
+export async function getUserProfile(uid: string): Promise<AppUser | null> {
+  try {
+    const uRef = doc(db, 'users', uid);
+    const snap = await getDoc(uRef);
+    if (snap.exists()) {
+      return snap.data() as AppUser;
+    }
+  } catch (err) {
+    console.warn('Error fetching user profile:', err);
+  }
+  return null;
+}
+
+/**
+ * Save or update a user profile in Firestore
+ */
+export async function saveUserProfile(user: AppUser): Promise<void> {
+  try {
+    const uRef = doc(db, 'users', user.uid);
+    await setDoc(uRef, {
+      ...user,
+      updatedAt: new Date().toISOString()
+    }, { merge: true });
+  } catch (err) {
+    console.error('Error saving user profile:', err);
+    throw err;
+  }
+}
+
+/**
+ * List all users from Firestore
+ */
+export async function listAllUserProfiles(): Promise<AppUser[]> {
+  try {
+    const colRef = collection(db, 'users');
+    const snap = await getDocs(colRef);
+    const users: AppUser[] = [];
+    snap.forEach((d) => {
+      users.push(d.data() as AppUser);
+    });
+    return users;
+  } catch (err) {
+    console.warn('Error listing user profiles from Firestore:', err);
+    return [];
+  }
+}
+
+/**
+ * Delete a user profile from Firestore
+ */
+export async function deleteUserProfile(uid: string): Promise<void> {
+  try {
+    const uRef = doc(db, 'users', uid);
+    await deleteDoc(uRef);
+  } catch (err) {
+    console.error('Error deleting user profile:', err);
+    throw err;
+  }
+}
+

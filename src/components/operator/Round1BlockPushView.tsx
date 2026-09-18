@@ -1,41 +1,75 @@
 import React, { useState, useEffect } from 'react';
 import { 
-  Check, 
-  Save, 
-  Send, 
+  Play, 
+  Square, 
   RotateCcw, 
-  SkipForward, 
-  AlertCircle, 
+  CheckCircle2, 
+  AlertTriangle, 
+  ChevronRight, 
+  Maximize2, 
+  Minimize2, 
+  Edit3, 
+  Send, 
   Clock, 
-  Layers, 
   Sparkles, 
-  CheckCircle2,
-  Info,
-  Tv,
-  HelpCircle,
-  TrendingUp
+  Layers, 
+  ArrowRight, 
+  Check, 
+  Tv, 
+  Undo2,
+  X,
+  Flame,
+  LayoutGrid
 } from 'lucide-react';
 import { useCompetition } from '../../context/CompetitionContext';
+import { useAuth } from '../../context/AuthContext';
+import { useArenaTimer } from '../../hooks/useArenaTimer';
 import { 
   OFFICIAL_BLOCK_WEIGHTS, 
   BLOCK_PUSH_CONFIG, 
   calculateBlockPushScore 
 } from '../../data/officialRules';
-import { PushBlockStatus, BlockPushBlockEntry } from '../../types';
+import { PushBlockStatus } from '../../types';
 
 export const Round1BlockPushView: React.FC = () => {
   const { 
     state, 
     currentSchool, 
+    upNextSchool, 
     saveBlockPushDraft, 
     publishBlockPushScore, 
+    discardDraftRun,
     advanceQueue,
-    setDisplayState
+    setDisplayState,
+    setCurrentTeamManually,
+    startActiveRun,
+    updateActiveRunBlock,
+    stopActiveRun,
+    restartActiveRun,
+    unlockActiveRunReview
   } = useCompetition();
 
+  const { currentUser, userRole } = useAuth();
+
+  const {
+    remainingSeconds,
+    formattedTime,
+    status: timerStatus,
+    isUrgent,
+    isTimeOver,
+    start: startTimer,
+    stop: stopTimer,
+    reset: resetTimer
+  } = useArenaTimer();
+
+  // Evaluator Mode view state (true by default)
+  const [evaluatorMode, setEvaluatorMode] = useState<boolean>(true);
+  const [isFullscreen, setIsFullscreen] = useState<boolean>(false);
+
+  // Active school selection
   const [selectedSchoolId, setSelectedSchoolId] = useState<string>('');
   
-  // State for the 6 official blocks: weightId -> 'none' | 'complete' | 'incomplete'
+  // 6 official blocks: weightId -> 'none' | 'complete' | 'incomplete'
   const [blockStatuses, setBlockStatuses] = useState<Record<string, PushBlockStatus>>({
     '200g': 'none',
     '500g': 'none',
@@ -45,21 +79,27 @@ export const Round1BlockPushView: React.FC = () => {
     '4kg': 'none',
   });
 
-  const [timeLeftSeconds, setTimeLeftSeconds] = useState<number>(0);
-  const [notes, setNotes] = useState<string>('');
-  const [isPreviewModalOpen, setIsPreviewModalOpen] = useState<boolean>(false);
+  // Score override / discrepancy modal state
+  const [isEditModalOpen, setIsEditModalOpen] = useState<boolean>(false);
+  const [manualTimeBonus, setManualTimeBonus] = useState<number | null>(null);
+  const [operatorNotes, setOperatorNotes] = useState<string>('');
+  
+  // Reset run confirmation modal
+  const [isResetConfirmOpen, setIsResetConfirmOpen] = useState<boolean>(false);
+
+  // Success / Feedback alert
   const [feedbackMsg, setFeedbackMsg] = useState<{ text: string; type: 'success' | 'info' } | null>(null);
 
-  // Sync with current queue team
+  // Keep selectedSchoolId in sync with current queue team
   useEffect(() => {
-    if (!selectedSchoolId && currentSchool) {
+    if (currentSchool && (!selectedSchoolId || selectedSchoolId !== currentSchool.id)) {
       setSelectedSchoolId(currentSchool.id);
     } else if (!selectedSchoolId && state.schools.length > 0) {
       setSelectedSchoolId(state.schools[0].id);
     }
   }, [currentSchool, state.schools, selectedSchoolId]);
 
-  // Load existing draft or score when selected school changes
+  // Load existing draft or published score when team changes
   useEffect(() => {
     if (selectedSchoolId) {
       const existing = state.scores[selectedSchoolId]?.round1;
@@ -80,8 +120,7 @@ export const Round1BlockPushView: React.FC = () => {
           });
         }
         setBlockStatuses(statuses);
-        setTimeLeftSeconds(existing.timeLeftSeconds ?? 0);
-        setNotes(existing.notes || '');
+        setOperatorNotes(existing.notes || '');
       } else {
         // Reset defaults
         setBlockStatuses({
@@ -92,32 +131,143 @@ export const Round1BlockPushView: React.FC = () => {
           '2kg': 'none',
           '4kg': 'none',
         });
-        setTimeLeftSeconds(0);
-        setNotes('');
+        setOperatorNotes('');
+        setManualTimeBonus(null);
       }
     }
   }, [selectedSchoolId, state.scores]);
 
-  // Prepare calculation payload
+  // Run state logic:
+  // - idle: READY TO START (Time bonus is inactive = 0 pts)
+  // - running: LIVE RUN IN PROGRESS (Time bonus = remaining seconds)
+  // - stopped: REVIEW / READY TO PUBLISH (Time bonus = frozen remaining seconds)
+  // - time_over: REVIEW / READY TO PUBLISH (Time bonus = 0 pts)
+  const isRunStarted = timerStatus === 'running' || timerStatus === 'stopped' || timerStatus === 'time_over' || manualTimeBonus !== null;
+  const effectiveTimeLeft = !isRunStarted
+    ? 120
+    : timerStatus === 'time_over'
+      ? 0
+      : (manualTimeBonus !== null ? manualTimeBonus : remainingSeconds);
+
+  const timeBonusEarned = !isRunStarted
+    ? 0
+    : timerStatus === 'time_over'
+      ? 0
+      : effectiveTimeLeft;
+
+  // Active blocks payload for official calculation
   const activeInputBlocks = OFFICIAL_BLOCK_WEIGHTS.map(def => ({
     weightId: def.id,
     status: blockStatuses[def.id] || 'none'
   }));
 
-  const scoreCalculation = calculateBlockPushScore(activeInputBlocks, timeLeftSeconds);
-
   const activeSchool = state.schools.find(s => s.id === selectedSchoolId);
   const existingScore = activeSchool ? state.scores[activeSchool.id]?.round1 : null;
   const isPublished = !!(existingScore && !existingScore.isDraft);
 
-  const handleSetStatus = (weightId: string, status: PushBlockStatus) => {
+  // Authoritative calculation
+  const calculatedBlockScore = activeInputBlocks.reduce((sum, item) => {
+    const blockDef = OFFICIAL_BLOCK_WEIGHTS.find(b => b.id === item.weightId);
+    if (!blockDef) return sum;
+    if (item.status === 'complete') return sum + blockDef.fullPoints;
+    if (item.status === 'incomplete') return sum + blockDef.incompletePoints;
+    return sum;
+  }, 0);
+
+  const scoreCalculation = {
+    blocks: activeInputBlocks.map(item => {
+      const blockDef = OFFICIAL_BLOCK_WEIGHTS.find(b => b.id === item.weightId)!;
+      const pts = item.status === 'complete' ? blockDef.fullPoints : item.status === 'incomplete' ? blockDef.incompletePoints : 0;
+      return {
+        weightId: item.weightId,
+        status: item.status,
+        pointsAwarded: pts
+      };
+    }),
+    blockScore: calculatedBlockScore,
+    timeLeftSeconds: effectiveTimeLeft,
+    timeBonus: timeBonusEarned,
+    finalScore: calculatedBlockScore + timeBonusEarned
+  };
+
+  // Fullscreen toggle
+  const toggleFullscreen = () => {
+    if (!document.fullscreenElement) {
+      document.documentElement.requestFullscreen().catch(() => {});
+      setIsFullscreen(true);
+    } else {
+      if (document.exitFullscreen) {
+        document.exitFullscreen().catch(() => {});
+        setIsFullscreen(false);
+      }
+    }
+  };
+
+  // Block status handlers (fast 1-touch actions)
+  const handleMarkBlock = (weightId: string, status: PushBlockStatus) => {
     setBlockStatuses(prev => ({
       ...prev,
       [weightId]: status
     }));
+
+    // Update active run state (in-memory & cloud broadcast)
+    updateActiveRunBlock(weightId, status, currentUser);
+
+    // Auto-save draft quietly in background so state is never lost
+    if (selectedSchoolId && isRunStarted) {
+      const updatedBlocks = OFFICIAL_BLOCK_WEIGHTS.map(def => ({
+        weightId: def.id,
+        status: def.id === weightId ? status : (blockStatuses[def.id] || 'none')
+      }));
+      const blockPts = updatedBlocks.reduce((sum, item) => {
+        const blockDef = OFFICIAL_BLOCK_WEIGHTS.find(b => b.id === item.weightId);
+        if (!blockDef) return sum;
+        if (item.status === 'complete') return sum + blockDef.fullPoints;
+        if (item.status === 'incomplete') return sum + blockDef.incompletePoints;
+        return sum;
+      }, 0);
+
+      saveBlockPushDraft(selectedSchoolId, {
+        blocks: updatedBlocks.map(item => {
+          const blockDef = OFFICIAL_BLOCK_WEIGHTS.find(b => b.id === item.weightId)!;
+          const pts = item.status === 'complete' ? blockDef.fullPoints : item.status === 'incomplete' ? blockDef.incompletePoints : 0;
+          return { weightId: item.weightId, status: item.status, pointsAwarded: pts };
+        }),
+        blockScore: blockPts,
+        timeLeftSeconds: effectiveTimeLeft,
+        timeBonus: timeBonusEarned,
+        finalScore: blockPts + timeBonusEarned,
+        isDraft: true,
+        notes: operatorNotes
+      });
+    }
   };
 
-  const handleResetAllBlocks = () => {
+  const handleClearBlock = (weightId: string) => {
+    handleMarkBlock(weightId, 'none');
+  };
+
+  // Timer START
+  const handleStartTimer = () => {
+    startTimer(120);
+    startActiveRun(selectedSchoolId, 1, currentUser);
+  };
+
+  // Timer STOP
+  const handleStopTimer = () => {
+    stopTimer();
+    stopActiveRun(currentUser, effectiveTimeLeft);
+    if (selectedSchoolId) {
+      saveBlockPushDraft(selectedSchoolId, {
+        ...scoreCalculation,
+        isDraft: true,
+        notes: operatorNotes
+      });
+    }
+  };
+
+  // Reset current run (restores 01:20, clears all blocks, and discards draft without saving to database)
+  const handleConfirmResetRun = () => {
     setBlockStatuses({
       '200g': 'none',
       '500g': 'none',
@@ -126,585 +276,678 @@ export const Round1BlockPushView: React.FC = () => {
       '2kg': 'none',
       '4kg': 'none',
     });
-    setTimeLeftSeconds(0);
+    setManualTimeBonus(null);
+    setOperatorNotes('');
+    resetTimer(120);
+    setIsResetConfirmOpen(false);
+
+    restartActiveRun(selectedSchoolId, 1, currentUser);
+
+    if (selectedSchoolId) {
+      discardDraftRun(selectedSchoolId, 1);
+    }
+
+    setFeedbackMsg({ text: 'Run reset. Timer restored to 01:20 and score reset to 0.', type: 'info' });
+    setTimeout(() => setFeedbackMsg(null), 3000);
   };
 
-  const handleSaveDraft = () => {
+  // PUBLISH SCORE
+  const handlePublishScore = () => {
     if (!selectedSchoolId) return;
-    saveBlockPushDraft(selectedSchoolId, {
-      ...scoreCalculation,
-      isDraft: true,
-      notes
-    });
-    setFeedbackMsg({ text: 'Draft saved. Public display remains unchanged.', type: 'info' });
-    setTimeout(() => setFeedbackMsg(null), 3500);
-  };
 
-  const handlePublishConfirmed = () => {
-    if (!selectedSchoolId) return;
     publishBlockPushScore(selectedSchoolId, {
       ...scoreCalculation,
-      notes
+      notes: operatorNotes
     });
-    setIsPreviewModalOpen(false);
+
     setFeedbackMsg({ 
-      text: `Score of ${scoreCalculation.finalScore} PTS officially published for ${activeSchool?.name}!`, 
+      text: `Score of ${scoreCalculation.finalScore} PTS published for ${activeSchool?.name}!`, 
       type: 'success' 
     });
     setTimeout(() => setFeedbackMsg(null), 4000);
   };
 
-  const pushedCount = Object.values(blockStatuses).filter(s => s !== 'none').length;
+  // NEXT TEAM (Advance queue and reset for new team)
+  const handleNextTeam = () => {
+    advanceQueue();
+    // Reset local run state for next team
+    setBlockStatuses({
+      '200g': 'none',
+      '500g': 'none',
+      '700g': 'none',
+      '1kg': 'none',
+      '2kg': 'none',
+      '4kg': 'none',
+    });
+    setManualTimeBonus(null);
+    setOperatorNotes('');
+    resetTimer(120);
+  };
+
+  // Count pushed blocks
+  const recordedCount = Object.values(blockStatuses).filter(s => s !== 'none').length;
 
   return (
-    <div className="space-y-6 max-w-6xl mx-auto">
-      {/* Top Banner - Blue theme */}
-      <div className="bg-gradient-to-r from-blue-950/80 via-slate-900 to-blue-950/80 border-2 border-blue-600/40 rounded-2xl p-5 shadow-xl shadow-blue-950/20">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-          <div className="flex items-center space-x-3.5">
-            <div className="w-12 h-12 rounded-xl bg-blue-600 flex items-center justify-center text-white font-display font-black text-xl shadow-lg shadow-blue-600/30">
-              R1
+    <div className="w-full max-w-7xl mx-auto space-y-3 pb-8 select-none">
+      
+      {/* 1. COMPACT TOP HEADER BAR FOR EVALUATOR MODE */}
+      <header className="bg-slate-900/95 border border-slate-800 rounded-2xl p-3 sm:px-5 flex items-center justify-between shadow-xl backdrop-blur-md">
+        <div className="flex items-center space-x-3">
+          <img 
+            src="/brl-logo.png" 
+            alt="BRL Logo" 
+            className="w-10 h-10 object-contain drop-shadow-[0_0_8px_rgba(245,158,11,0.3)]" 
+          />
+          <div>
+            <div className="flex items-center gap-2">
+              <span className="text-xs font-bold text-amber-400 font-display tracking-wider">
+                BHARAT ROBOTICS LEAGUE 2026
+              </span>
+              <span className="px-2 py-0.5 rounded-full bg-blue-500/20 text-blue-300 border border-blue-500/40 text-[10px] font-bold font-mono uppercase">
+                ROUND 1
+              </span>
+              <span className="flex items-center gap-1 text-[10px] font-bold font-mono text-emerald-400">
+                <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+                <span>POD 1 • LIVE</span>
+              </span>
             </div>
-            <div>
-              <div className="flex items-center gap-2 text-xs font-bold text-blue-400 uppercase tracking-wider">
-                <span className="w-2 h-2 rounded-full bg-blue-400 animate-pulse"></span>
-                <span>ROUND 1 • OFFICIAL SCORING ENGINE</span>
-              </div>
-              <h2 className="text-xl sm:text-2xl font-display font-bold text-white">
-                BLOCK PUSH CHALLENGE
-              </h2>
-              <p className="text-xs text-slate-300 mt-0.5">
-                Total Time: 120s • Complete inside box: 100% pts • Any portion outside: 50% pts • Unused seconds: 1 pt/sec bonus
-              </p>
-            </div>
-          </div>
-
-          <div className="flex items-center gap-2 self-start sm:self-auto">
-            <button
-              onClick={() => setDisplayState('live_run')}
-              className="px-3 py-2 bg-blue-900/60 hover:bg-blue-800/80 text-blue-200 border border-blue-500/40 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition"
-              title="Show live run on big screen"
-            >
-              <Tv className="w-3.5 h-3.5 text-blue-400" />
-              <span>Show on Arena Screen</span>
-            </button>
-            <button
-              onClick={advanceQueue}
-              className="px-3.5 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition"
-              title="Advance queue to next team"
-            >
-              <SkipForward className="w-3.5 h-3.5 text-amber-400" />
-              <span>Next Team</span>
-            </button>
+            <h1 className="text-base sm:text-lg font-display font-bold text-white tracking-wide">
+              BLOCK PUSH EVALUATOR CONSOLE
+            </h1>
           </div>
         </div>
-      </div>
 
+        {/* Header Actions */}
+        <div className="flex items-center space-x-2">
+          {/* Arena Display Shortcut */}
+          <button
+            onClick={() => setDisplayState('live_run')}
+            className="hidden sm:inline-flex items-center gap-1 px-3 py-1.5 bg-blue-950 hover:bg-blue-900 border border-blue-700/60 rounded-xl text-xs font-semibold text-blue-200 transition"
+            title="Launch synced Arena Screen"
+          >
+            <Tv className="w-3.5 h-3.5 text-blue-400" />
+            <span>Arena Display</span>
+          </button>
+
+          {/* Fullscreen Toggle */}
+          <button
+            onClick={toggleFullscreen}
+            className="p-2 bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded-xl text-amber-400 transition"
+            title={isFullscreen ? 'Exit Fullscreen' : 'Enter Fullscreen'}
+          >
+            {isFullscreen ? <Minimize2 className="w-4 h-4" /> : <Maximize2 className="w-4 h-4" />}
+          </button>
+
+          {/* View Mode Toggle */}
+          <button
+            onClick={() => setEvaluatorMode(!evaluatorMode)}
+            className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded-xl text-xs font-semibold text-slate-300 flex items-center gap-1.5 transition"
+          >
+            <LayoutGrid className="w-3.5 h-3.5 text-slate-400" />
+            <span>{evaluatorMode ? 'Admin View' : 'Evaluator View'}</span>
+          </button>
+        </div>
+      </header>
+
+      {/* Global Feedback notification */}
       {feedbackMsg && (
-        <div className={`p-4 rounded-xl border flex items-center justify-between ${
+        <div className={`p-3 rounded-xl border flex items-center justify-between text-xs font-semibold ${
           feedbackMsg.type === 'success' 
-            ? 'bg-emerald-950/60 border-emerald-500 text-emerald-200' 
-            : 'bg-blue-950/60 border-blue-500 text-blue-200'
+            ? 'bg-emerald-950/80 border-emerald-500 text-emerald-200' 
+            : 'bg-blue-950/80 border-blue-500 text-blue-200'
         }`}>
-          <div className="flex items-center space-x-2 text-sm font-semibold">
-            <CheckCircle2 className="w-5 h-5 text-emerald-400 shrink-0" />
+          <div className="flex items-center space-x-2">
+            <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
             <span>{feedbackMsg.text}</span>
           </div>
           <button 
             onClick={() => setFeedbackMsg(null)}
-            className="text-xs underline text-slate-400 hover:text-white"
+            className="text-xs text-slate-400 hover:text-white underline"
           >
             Dismiss
           </button>
         </div>
       )}
 
-      {/* Main Scoring Grid */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+      {/* 2. MAIN EVALUATOR WORKSPACE (COMPACT, TOUCH-OPTIMIZED 2-PANEL LAYOUT) */}
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-3">
         
-        {/* Left 8 Cols: School Selector & 6 Block Entry */}
-        <div className="lg:col-span-8 space-y-6">
+        {/* LEFT 7 COLS: CURRENT TEAM & BLOCK SELECTION CONTROLS */}
+        <div className="lg:col-span-7 space-y-3">
           
-          {/* School Selector Card */}
-          <div className="bg-slate-900/90 border border-slate-800 rounded-2xl p-5">
-            <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">
-              Select Competing School / Team
-            </label>
-            <div className="flex flex-col sm:flex-row gap-3">
-              <select
-                value={selectedSchoolId}
-                onChange={(e) => setSelectedSchoolId(e.target.value)}
-                className="flex-1 bg-slate-950 border border-slate-700 rounded-xl px-4 py-2.5 text-white font-medium focus:outline-none focus:border-blue-500 text-sm"
-              >
-                {state.schools.map((school) => {
-                  const hasScored = state.scores[school.id]?.round1 && !state.scores[school.id]?.round1?.isDraft;
-                  const isCurrent = currentSchool?.id === school.id;
-                  return (
-                    <option key={school.id} value={school.id}>
-                      {isCurrent ? '▶ [NOW PLAYING] ' : ''}
-                      {school.name} ({school.teamNumber} - {school.teamName})
-                      {hasScored ? ` • Published: ${state.scores[school.id]?.round1?.finalScore} pts` : ''}
-                    </option>
-                  );
-                })}
-              </select>
-
-              {currentSchool && selectedSchoolId !== currentSchool.id && (
-                <button
-                  type="button"
-                  onClick={() => setSelectedSchoolId(currentSchool.id)}
-                  className="px-3.5 py-2 bg-blue-600/20 hover:bg-blue-600/30 text-blue-300 border border-blue-500/30 rounded-xl text-xs font-bold transition whitespace-nowrap"
-                >
-                  Jump to Current Playing ({currentSchool.teamNumber})
-                </button>
-              )}
-            </div>
-
-            {/* School Details Badge */}
-            {activeSchool && (
-              <div className="mt-4 pt-3 border-t border-slate-800/80 flex flex-wrap items-center justify-between gap-2 text-xs">
-                <div className="flex items-center gap-2">
-                  <span className="px-2.5 py-0.5 rounded bg-blue-500/20 text-blue-300 font-mono font-bold border border-blue-500/30">
-                    {activeSchool.teamNumber}
-                  </span>
-                  <span className="font-bold text-white">{activeSchool.teamName}</span>
-                  <span className="text-slate-400">• {activeSchool.city}</span>
+          {/* A. CURRENT TEAM & UP NEXT CARD */}
+          <div className="bg-slate-900/90 border border-slate-800 rounded-2xl p-4 shadow-lg">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 items-center">
+              
+              {/* Now Playing */}
+              <div>
+                <div className="text-[11px] font-mono font-bold text-amber-400 uppercase tracking-widest flex items-center gap-1.5 mb-1">
+                  <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+                  <span>NOW PLAYING (CURRENT TEAM)</span>
                 </div>
+                {activeSchool ? (
+                  <div>
+                    <h2 className="text-xl sm:text-2xl font-display font-black text-white leading-tight truncate">
+                      {activeSchool.name}
+                    </h2>
+                    <div className="flex items-center gap-2 mt-1">
+                      <span className="px-2 py-0.5 rounded bg-blue-500/20 text-blue-300 font-mono text-xs font-bold border border-blue-500/30">
+                        {activeSchool.teamNumber}
+                      </span>
+                      <span className="text-sm font-bold text-amber-300 truncate">
+                        {activeSchool.teamName}
+                      </span>
+                      <span className="text-xs text-slate-400">• {activeSchool.city}</span>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="text-sm text-slate-400 italic">No team currently staged</div>
+                )}
+              </div>
 
-                <div className="flex items-center gap-2">
-                  {isPublished ? (
-                    <span className="px-2.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 font-semibold flex items-center gap-1">
-                      <Check className="w-3 h-3 text-emerald-400" />
-                      Score Published ({existingScore?.finalScore} pts)
-                    </span>
-                  ) : existingScore?.isDraft ? (
-                    <span className="px-2.5 py-0.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/40 font-semibold">
-                      Draft Saved ({existingScore.finalScore} pts)
-                    </span>
-                  ) : (
-                    <span className="px-2.5 py-0.5 rounded-full bg-slate-800 text-slate-400 border border-slate-700">
-                      Not Yet Scored
-                    </span>
-                  )}
+              {/* Up Next in Queue */}
+              <div className="border-t sm:border-t-0 sm:border-l border-slate-800 pt-3 sm:pt-0 sm:pl-4">
+                <div className="text-[11px] font-mono font-bold text-cyan-400 uppercase tracking-widest mb-1 flex items-center gap-1">
+                  <Clock className="w-3 h-3" />
+                  <span>UP NEXT (ON DECK)</span>
+                </div>
+                {upNextSchool ? (
+                  <div>
+                    <div className="text-sm sm:text-base font-display font-bold text-slate-200 truncate">
+                      {upNextSchool.name}
+                    </div>
+                    <div className="text-xs text-slate-400 truncate">
+                      {upNextSchool.teamName} ({upNextSchool.teamNumber})
+                    </div>
+                  </div>
+                ) : (
+                  <div className="text-xs text-slate-500">End of round queue</div>
+                )}
+
+                {/* Quick School Switcher (for emergencies) */}
+                <div className="mt-2">
+                  <select
+                    value={selectedSchoolId}
+                    onChange={(e) => {
+                      setSelectedSchoolId(e.target.value);
+                      setCurrentTeamManually(e.target.value);
+                    }}
+                    className="w-full bg-slate-950 border border-slate-800 text-slate-300 text-[11px] rounded-lg px-2 py-1 focus:outline-none focus:border-blue-500"
+                  >
+                    {state.schools.map(s => (
+                      <option key={s.id} value={s.id}>
+                        Switch Team: {s.teamNumber} - {s.name}
+                      </option>
+                    ))}
+                  </select>
                 </div>
               </div>
-            )}
+
+            </div>
           </div>
 
-          {/* Block Weights & Status Entry Table */}
-          <div className="bg-slate-900/90 border border-slate-800 rounded-2xl p-5 space-y-4">
-            <div className="flex items-center justify-between border-b border-slate-800 pb-3">
-              <div>
-                <h3 className="font-display font-bold text-white text-base flex items-center gap-2">
-                  <Layers className="w-4 h-4 text-blue-400" />
-                  <span>Push Challenge Blocks (Official 6 Weights)</span>
-                </h3>
-                <p className="text-xs text-slate-400 mt-0.5">
-                  Click status for each block pushed. Each physical block is recorded once to prevent duplicate errors.
-                </p>
+          {/* B. THE 6 OFFICIAL BLOCK BUTTONS (LARGE, TOUCH-FRIENDLY, INSTANT RECORDING) */}
+          <div className="bg-slate-900/90 border border-slate-800 rounded-2xl p-4 shadow-lg">
+            <div className="flex items-center justify-between mb-3">
+              <div className="flex items-center gap-2">
+                <Layers className="w-4 h-4 text-blue-400" />
+                <span className="text-xs font-mono font-bold text-slate-300 uppercase tracking-wider">
+                  OFFICIAL BLOCK WEIGHTS (6 BLOCKS)
+                </span>
               </div>
-              <button
-                type="button"
-                onClick={handleResetAllBlocks}
-                className="text-xs text-slate-400 hover:text-amber-400 flex items-center gap-1 transition"
-              >
-                <RotateCcw className="w-3.5 h-3.5" />
-                <span>Reset Blocks</span>
-              </button>
+              <div className="text-xs font-mono text-slate-400">
+                <span className="text-white font-bold">{recordedCount}</span> / 6 Recorded
+              </div>
             </div>
 
-            {/* Blocks List */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
-              {OFFICIAL_BLOCK_WEIGHTS.map((weightDef) => {
-                const currentStatus = blockStatuses[weightDef.id] || 'none';
+            {/* Grid of 6 Blocks */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2.5">
+              {OFFICIAL_BLOCK_WEIGHTS.map((block) => {
+                const currentStatus = blockStatuses[block.id] || 'none';
                 const isComplete = currentStatus === 'complete';
                 const isIncomplete = currentStatus === 'incomplete';
-                const isNone = currentStatus === 'none';
-
-                let earnedPts = 0;
-                if (isComplete) earnedPts = weightDef.fullPoints;
-                if (isIncomplete) earnedPts = weightDef.incompletePoints;
+                const isRecorded = currentStatus !== 'none';
+                const points = isComplete 
+                  ? block.fullPoints 
+                  : isIncomplete 
+                    ? block.incompletePoints 
+                    : 0;
 
                 return (
                   <div
-                    key={weightDef.id}
-                    className={`p-4 rounded-xl border transition-all ${
-                      isComplete 
-                        ? 'bg-blue-950/40 border-blue-500 shadow-md shadow-blue-950/40' 
-                        : isIncomplete 
-                          ? 'bg-indigo-950/40 border-indigo-500/80 shadow-md shadow-indigo-950/30' 
-                          : 'bg-slate-950/60 border-slate-800 hover:border-slate-700'
+                    key={block.id}
+                    className={`rounded-xl border-2 p-3 transition-all ${
+                      isComplete
+                        ? 'bg-emerald-950/50 border-emerald-500 shadow-md shadow-emerald-950/40'
+                        : isIncomplete
+                          ? 'bg-amber-950/50 border-amber-500 shadow-md shadow-amber-950/40'
+                          : 'bg-slate-950/80 border-slate-800 hover:border-slate-700'
                     }`}
                   >
-                    <div className="flex items-start justify-between mb-3">
-                      <div>
-                        <div className="flex items-center gap-2">
-                          <span className="text-lg font-display font-black text-white">
-                            {weightDef.label}
-                          </span>
-                          <span className="text-[11px] font-mono px-2 py-0.5 rounded bg-slate-800 text-slate-300">
-                            Full: {weightDef.fullPoints} pts / Half: {weightDef.incompletePoints} pts
-                          </span>
-                        </div>
-                        <div className="text-[11px] text-slate-400 mt-0.5">
-                          {weightDef.description}
-                        </div>
-                      </div>
-
-                      <div className="text-right pl-2">
-                        <div className={`text-xl font-display font-black ${
-                          isComplete ? 'text-blue-400' : isIncomplete ? 'text-indigo-300' : 'text-slate-600'
-                        }`}>
-                          +{earnedPts}
-                        </div>
-                        <div className="text-[10px] text-slate-500 uppercase font-mono">
-                          {earnedPts > 0 ? 'EARNED' : '0 PTS'}
-                        </div>
-                      </div>
+                    {/* Block Header Info */}
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="text-lg font-display font-black text-white">
+                        {block.label}
+                      </span>
+                      <span className="text-[11px] font-mono text-slate-400">
+                        Max {block.fullPoints} pts
+                      </span>
                     </div>
 
-                    {/* Status Toggle Buttons */}
-                    <div className="grid grid-cols-3 gap-1.5 p-1 bg-slate-950 rounded-lg border border-slate-800/80 text-xs">
-                      <button
-                        type="button"
-                        onClick={() => handleSetStatus(weightDef.id, 'none')}
-                        className={`py-1.5 px-2 rounded-md font-semibold transition ${
-                          isNone 
-                            ? 'bg-slate-800 text-slate-200 shadow-sm' 
-                            : 'text-slate-400 hover:text-white'
-                        }`}
-                      >
-                        Not Pushed
-                      </button>
-
-                      <button
-                        type="button"
-                        onClick={() => handleSetStatus(weightDef.id, 'incomplete')}
-                        className={`py-1.5 px-2 rounded-md font-bold transition flex items-center justify-center gap-1 ${
-                          isIncomplete 
-                            ? 'bg-indigo-600 text-white shadow-sm' 
-                            : 'text-slate-300 hover:text-white hover:bg-slate-900'
-                        }`}
-                        title="Any portion of block remains outside designated box (50% points)"
-                      >
-                        <span>Incomplete (50%)</span>
-                      </button>
-
-                      <button
-                        type="button"
-                        onClick={() => handleSetStatus(weightDef.id, 'complete')}
-                        className={`py-1.5 px-2 rounded-md font-bold transition flex items-center justify-center gap-1 ${
+                    {/* Status Badge when Recorded */}
+                    {isRecorded ? (
+                      <div className="space-y-2">
+                        <div className={`py-1 px-2 rounded-lg text-xs font-bold font-mono flex items-center justify-between ${
                           isComplete 
-                            ? 'bg-blue-600 text-white shadow-sm' 
-                            : 'text-slate-300 hover:text-white hover:bg-slate-900'
-                        }`}
-                        title="Pushed completely inside designated box (100% points)"
-                      >
-                        <Check className="w-3 h-3" />
-                        <span>Complete (100%)</span>
-                      </button>
-                    </div>
+                            ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40'
+                            : 'bg-amber-500/20 text-amber-300 border border-amber-500/40'
+                        }`}>
+                          <span className="flex items-center gap-1">
+                            <Check className="w-3.5 h-3.5" />
+                            <span>{isComplete ? 'COMPLETE' : 'INCOMPLETE'}</span>
+                          </span>
+                          <span className="text-sm font-black">+{points} PTS</span>
+                        </div>
+
+                        {/* Edit / Change Button */}
+                        <div className="flex items-center gap-1.5 pt-1 border-t border-slate-800/80">
+                          <button
+                            onClick={() => handleMarkBlock(block.id, isComplete ? 'incomplete' : 'complete')}
+                            className="flex-1 py-1 px-2 bg-slate-800 hover:bg-slate-700 text-[11px] font-semibold text-slate-300 rounded-lg transition"
+                          >
+                            Set {isComplete ? 'Incomplete (50%)' : 'Complete (100%)'}
+                          </button>
+                          <button
+                            onClick={() => handleClearBlock(block.id)}
+                            className="py-1 px-2 bg-rose-950/40 hover:bg-rose-900/60 text-rose-300 text-[11px] font-semibold rounded-lg border border-rose-800/50 transition"
+                            title="Clear block status"
+                          >
+                            Clear
+                          </button>
+                        </div>
+                      </div>
+                    ) : (
+                      /* Instant 1-Touch Action Buttons when Unrecorded */
+                      <div className="grid grid-cols-2 gap-1.5">
+                        <button
+                          onClick={() => handleMarkBlock(block.id, 'complete')}
+                          className="py-2.5 px-2 bg-emerald-600 hover:bg-emerald-500 active:bg-emerald-700 text-white text-xs font-bold rounded-lg shadow transition flex flex-col items-center justify-center leading-tight cursor-pointer"
+                        >
+                          <span className="text-[11px]">COMPLETE</span>
+                          <span className="font-mono text-xs font-black">+{block.fullPoints} pts</span>
+                        </button>
+
+                        <button
+                          onClick={() => handleMarkBlock(block.id, 'incomplete')}
+                          className="py-2.5 px-2 bg-amber-600 hover:bg-amber-500 active:bg-amber-700 text-white text-xs font-bold rounded-lg shadow transition flex flex-col items-center justify-center leading-tight cursor-pointer"
+                        >
+                          <span className="text-[11px]">INCOMPLETE</span>
+                          <span className="font-mono text-xs font-black">+{block.incompletePoints} pts</span>
+                        </button>
+                      </div>
+                    )}
                   </div>
                 );
               })}
             </div>
+          </div>
 
-            {/* Subtotal of Blocks */}
-            <div className="flex items-center justify-between pt-3 border-t border-slate-800 text-sm">
-              <span className="text-slate-400 font-medium">
-                Pushed Blocks: <strong className="text-white">{pushedCount} of 6</strong>
+        </div>
+
+        {/* RIGHT 5 COLS: TIMER, LIVE SCORE ACCUMULATION & ACTION WORKFLOW */}
+        <div className="lg:col-span-5 space-y-3">
+          
+          {/* C. 120-SECOND COUNTDOWN TIMER & CONTROLS */}
+          <div className={`rounded-2xl border-2 p-4 sm:p-5 shadow-xl transition-all duration-300 ${
+            isTimeOver
+              ? 'bg-red-950/60 border-red-600'
+              : isUrgent
+                ? 'bg-red-950/40 border-red-500 animate-pulse'
+                : 'bg-slate-900/95 border-slate-800'
+          }`}>
+            <div className="flex items-center justify-between mb-1.5">
+              <span className="text-xs font-mono font-bold text-slate-400 uppercase tracking-widest flex items-center gap-1.5">
+                <Clock className={`w-3.5 h-3.5 ${isUrgent || isTimeOver ? 'text-red-400' : 'text-blue-400'}`} />
+                <span>TIME REMAINING</span>
               </span>
-              <span className="text-blue-400 font-display font-bold text-base">
-                Subtotal Block Points: {scoreCalculation.blockScore} pts
+
+              {isUrgent && (
+                <span className="text-xs font-mono font-bold text-red-400 flex items-center gap-1 animate-bounce">
+                  <AlertTriangle className="w-3.5 h-3.5" />
+                  <span>FINAL 10s!</span>
+                </span>
+              )}
+
+              {isTimeOver && (
+                <span className="text-xs font-mono font-bold text-red-400 flex items-center gap-1">
+                  <Flame className="w-3.5 h-3.5" />
+                  <span>TIME OVER</span>
+                </span>
+              )}
+            </div>
+
+            {/* Big Prominent Timer Display */}
+            <div className="text-center py-2">
+              {isTimeOver ? (
+                <div>
+                  <div className="text-6xl sm:text-7xl font-mono font-black text-red-500 tracking-wider">
+                    00:00
+                  </div>
+                  <div className="text-sm font-display font-black text-red-400 uppercase mt-0.5">
+                    TIME OVER (0 TIME BONUS)
+                  </div>
+                </div>
+              ) : (
+                <div className={`text-6xl sm:text-7xl font-mono font-black tracking-tight ${
+                  isUrgent 
+                    ? 'text-red-500 drop-shadow-[0_0_15px_rgba(239,68,68,0.5)]' 
+                    : timerStatus === 'running' 
+                      ? 'text-amber-400' 
+                      : 'text-white'
+                }`}>
+                  {formattedTime}
+                </div>
+              )}
+
+              <div className="text-xs font-mono text-slate-400 mt-1">
+                Time Left: <span className="font-bold text-white">{effectiveTimeLeft}s</span> (Bonus: +{effectiveTimeLeft} pts)
+              </div>
+            </div>
+
+            {/* PRIMARY TIMER ACTION BUTTON: START OR HUGE RED STOP */}
+            <div className="mt-3">
+              {timerStatus === 'running' ? (
+                /* HUGE RED STOP BUTTON */
+                <button
+                  onClick={handleStopTimer}
+                  className="w-full py-4 px-6 bg-red-600 hover:bg-red-500 active:bg-red-700 text-white font-display font-black text-2xl sm:text-3xl rounded-xl shadow-2xl shadow-red-900/60 border-2 border-red-400 flex items-center justify-center gap-3 transition cursor-pointer"
+                >
+                  <Square className="w-7 h-7 fill-white" />
+                  <span>STOP RUN</span>
+                </button>
+              ) : (
+                /* LARGE GREEN START BUTTON (AVAILABLE ONLY ONCE PER RUN UNTIL RESET) */
+                <button
+                  onClick={handleStartTimer}
+                  disabled={timerStatus === 'stopped' || isTimeOver}
+                  className={`w-full py-3.5 px-6 font-display font-black text-xl rounded-xl shadow-xl flex items-center justify-center gap-2.5 transition ${
+                    timerStatus === 'stopped' || isTimeOver
+                      ? 'bg-slate-800 text-slate-500 border border-slate-700 cursor-not-allowed'
+                      : 'bg-emerald-600 hover:bg-emerald-500 text-white shadow-emerald-950/40 border-2 border-emerald-400 cursor-pointer'
+                  }`}
+                >
+                  <Play className="w-6 h-6 fill-white" />
+                  <span>{timerStatus === 'stopped' ? 'TIMER STOPPED' : 'START 120s RUN'}</span>
+                </button>
+              )}
+            </div>
+
+            {/* Secondary: Restart / Reset Run Control */}
+            <div className="mt-3 pt-2.5 border-t border-slate-800/80 flex items-center justify-between">
+              <span className="text-[11px] font-mono text-slate-500">
+                Official limit: 120 seconds
               </span>
+              <button
+                onClick={() => setIsResetConfirmOpen(true)}
+                className="text-xs font-mono font-bold text-rose-400 hover:text-rose-300 flex items-center gap-1.5 transition cursor-pointer"
+              >
+                <RotateCcw className="w-3.5 h-3.5" />
+                <span>RESTART RUN</span>
+              </button>
             </div>
           </div>
 
-          {/* Time Remaining & Bonus Input */}
-          <div className="bg-slate-900/90 border border-slate-800 rounded-2xl p-5 space-y-4">
-            <div className="flex items-center justify-between border-b border-slate-800 pb-3">
-              <div className="flex items-center space-x-2">
-                <Clock className="w-5 h-5 text-blue-400" />
-                <h3 className="font-display font-bold text-white text-base">
-                  Time Allocation & Time Bonus
-                </h3>
+          {/* D. LIVE SCORE ACCUMULATION & REVIEW CARD */}
+          <div className="bg-slate-900/90 border border-slate-800 rounded-2xl p-4 shadow-lg space-y-3">
+            <div className="flex items-center justify-between border-b border-slate-800 pb-2.5">
+              <div>
+                <span className="text-xs font-mono font-bold text-slate-300 uppercase tracking-wider block">
+                  {isPublished 
+                    ? 'OFFICIAL PUBLISHED SCORE' 
+                    : (timerStatus === 'stopped' || isTimeOver)
+                      ? 'SCORE REVIEW & CONFIRMATION'
+                      : 'LIVE SCORE PREVIEW'}
+                </span>
+                <span className="text-[11px] text-slate-400">
+                  {isPublished
+                    ? 'Live on Arena Secondary Display & Leaderboard'
+                    : (timerStatus === 'stopped' || isTimeOver)
+                      ? 'Run stopped. Review before publishing.'
+                      : timerStatus === 'running'
+                        ? 'Draft run in progress (Not official)'
+                        : 'Staged for start (Timer idle)'}
+                </span>
               </div>
-              <span className="text-xs font-mono font-bold px-2.5 py-1 rounded bg-blue-950 text-blue-300 border border-blue-800">
-                1 UNUSED SEC = +1 POINT
-              </span>
+
+              {isPublished ? (
+                <span className="px-2.5 py-1 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 text-[10px] font-mono font-black uppercase tracking-wider flex items-center gap-1">
+                  <CheckCircle2 className="w-3 h-3 text-emerald-400" />
+                  <span>PUBLISHED</span>
+                </span>
+              ) : (timerStatus === 'stopped' || isTimeOver) ? (
+                <span className="px-2.5 py-1 rounded-full bg-indigo-500/20 text-indigo-300 border border-indigo-500/40 text-[10px] font-mono font-black uppercase tracking-wider flex items-center gap-1">
+                  <span>READY TO PUBLISH</span>
+                </span>
+              ) : timerStatus === 'running' ? (
+                <span className="px-2.5 py-1 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/40 text-[10px] font-mono font-black uppercase tracking-wider flex items-center gap-1 animate-pulse">
+                  <span className="w-1.5 h-1.5 rounded-full bg-amber-400"></span>
+                  <span>DRAFT / LIVE</span>
+                </span>
+              ) : (
+                <span className="px-2.5 py-1 rounded-full bg-blue-500/20 text-blue-300 border border-blue-500/40 text-[10px] font-mono font-black uppercase tracking-wider">
+                  READY TO START
+                </span>
+              )}
             </div>
 
-            <div>
-              <div className="flex items-center justify-between mb-2">
-                <label className="text-xs font-bold text-slate-300 uppercase tracking-wider">
-                  Time Left / Unused (0 to 120 seconds):
-                </label>
-                <div className="flex items-center space-x-2">
-                  <span className="text-2xl font-display font-black text-blue-400">
-                    {timeLeftSeconds}s
-                  </span>
-                  <span className="text-xs font-bold text-emerald-400 bg-emerald-950/60 px-2 py-0.5 rounded border border-emerald-800">
-                    +{timeLeftSeconds} pts bonus
-                  </span>
+            {/* Score Breakdown Metrics */}
+            <div className="grid grid-cols-2 gap-2 text-xs">
+              <div className="bg-slate-950 p-3 rounded-xl border border-slate-800/80">
+                <div className="text-slate-400 font-mono text-[11px]">BLOCK POINTS</div>
+                <div className="text-2xl font-display font-black text-white mt-0.5">
+                  {scoreCalculation.blockScore}
+                  <span className="text-xs font-normal text-slate-400 ml-1">pts</span>
                 </div>
               </div>
 
-              {/* Slider */}
-              <input
-                type="range"
-                min="0"
-                max="120"
-                step="1"
-                value={timeLeftSeconds}
-                onChange={(e) => setTimeLeftSeconds(Number(e.target.value))}
-                className="w-full accent-blue-500 h-2 bg-slate-950 rounded-lg cursor-pointer"
-              />
-
-              {/* Quick Presets */}
-              <div className="flex flex-wrap gap-2 mt-3">
-                {[
-                  { label: '0s (Timeout)', val: 0 },
-                  { label: '15s', val: 15 },
-                  { label: '30s', val: 30 },
-                  { label: '45s', val: 45 },
-                  { label: '60s', val: 60 },
-                  { label: '75s', val: 75 },
-                  { label: '90s', val: 90 },
-                  { label: '120s (Instant)', val: 120 },
-                ].map(preset => (
-                  <button
-                    key={preset.val}
-                    type="button"
-                    onClick={() => setTimeLeftSeconds(preset.val)}
-                    className={`px-3 py-1.5 rounded-lg text-xs font-mono font-semibold transition border ${
-                      timeLeftSeconds === preset.val
-                        ? 'bg-blue-600 text-white border-blue-500'
-                        : 'bg-slate-950 text-slate-400 border-slate-800 hover:text-white hover:border-slate-700'
-                    }`}
-                  >
-                    {preset.label}
-                  </button>
-                ))}
+              <div className="bg-slate-950 p-3 rounded-xl border border-slate-800/80">
+                <div className="text-slate-400 font-mono text-[11px] flex justify-between">
+                  <span>TIME BONUS</span>
+                  <span className="text-slate-500">
+                    {!isRunStarted ? '0s' : isTimeOver ? '0s' : `${effectiveTimeLeft}s`}
+                  </span>
+                </div>
+                <div className="text-2xl font-display font-black text-cyan-400 mt-0.5">
+                  {scoreCalculation.timeBonus > 0 ? `+${scoreCalculation.timeBonus}` : '0'}
+                  <span className="text-xs font-normal text-slate-400 ml-1">pts</span>
+                </div>
               </div>
             </div>
 
-            {/* Referee Notes */}
-            <div className="pt-3 border-t border-slate-800">
-              <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">
-                Referee / Inspection Notes (Optional):
-              </label>
-              <input
-                type="text"
-                value={notes}
-                onChange={(e) => setNotes(e.target.value)}
-                placeholder="e.g. 4kg block rested partially on outer line; awarded 50% points"
-                className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2 text-sm text-slate-200 placeholder-slate-600 focus:outline-none focus:border-blue-500"
-              />
-            </div>
-          </div>
-        </div>
-
-        {/* Right 4 Cols: Instant Score Breakdown & Actions */}
-        <div className="lg:col-span-4 space-y-6">
-          
-          {/* Main Calculation Summary Card */}
-          <div className="bg-gradient-to-b from-slate-900 to-[#0c162d] border-2 border-blue-500/60 rounded-3xl p-6 shadow-2xl relative overflow-hidden">
-            <div className="text-xs font-bold text-blue-400 uppercase tracking-wider mb-1 flex items-center justify-between">
-              <span>LIVE SCORE PREVIEW</span>
-              <span className="w-2 h-2 rounded-full bg-blue-400 animate-ping"></span>
-            </div>
-            
-            <div className="mt-2 mb-4">
-              <div className="text-5xl font-display font-black text-white tracking-tight">
+            {/* FINAL SCORE DISPLAY */}
+            <div className="bg-gradient-to-r from-blue-950/80 via-slate-950 to-blue-950/80 border-2 border-blue-500/50 rounded-xl p-3.5 flex items-center justify-between">
+              <div>
+                <div className="text-[11px] font-mono font-bold text-blue-300 uppercase tracking-wider">
+                  {isPublished ? 'OFFICIAL SCORE' : 'CALCULATED SCORE'}
+                </div>
+                <div className="text-xs text-slate-400">
+                  {scoreCalculation.blockScore} (Blocks) + {scoreCalculation.timeBonus} (Time Bonus)
+                </div>
+              </div>
+              <div className="text-4xl sm:text-5xl font-display font-black text-amber-400 tracking-tight">
                 {scoreCalculation.finalScore}
-                <span className="text-lg font-normal text-blue-300 ml-2 font-mono">PTS</span>
-              </div>
-              <div className="text-xs text-slate-400 mt-1">
-                Official calculated total for Round 1
+                <span className="text-xs font-normal text-slate-400 ml-1.5">PTS</span>
               </div>
             </div>
 
-            {/* Breakdown List */}
-            <div className="space-y-2.5 py-4 border-t border-b border-blue-500/20 text-xs">
-              
-              <div className="flex items-center justify-between">
-                <span className="text-slate-300">Blocks Score ({pushedCount} pushed):</span>
-                <span className="font-mono font-bold text-white text-sm">
-                  {scoreCalculation.blockScore} pts
-                </span>
+            {/* E. CONFIRMATION & PUBLISH ACTIONS */}
+            <div className="space-y-2 pt-1">
+              <div className="grid grid-cols-2 gap-2">
+                {/* Edit Score Discrepancy Button */}
+                <button
+                  onClick={() => setIsEditModalOpen(true)}
+                  className="py-2.5 px-3 bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 rounded-xl text-xs font-semibold flex items-center justify-center gap-1.5 transition cursor-pointer"
+                  title="Manual adjustment / add evaluator notes"
+                >
+                  <Edit3 className="w-3.5 h-3.5 text-amber-400" />
+                  <span>Edit Score</span>
+                </button>
+
+                {/* Restart Run Button */}
+                <button
+                  onClick={() => setIsResetConfirmOpen(true)}
+                  className="py-2.5 px-3 bg-slate-800 hover:bg-rose-950/60 border border-slate-700 hover:border-rose-600/60 rounded-xl text-xs font-semibold text-rose-300 flex items-center justify-center gap-1.5 transition cursor-pointer"
+                >
+                  <RotateCcw className="w-3.5 h-3.5 text-rose-400" />
+                  <span>Restart Run</span>
+                </button>
               </div>
 
-              {/* List pushed blocks */}
-              <div className="pl-2 space-y-1 text-[11px] text-slate-400 font-mono">
-                {scoreCalculation.blocks.filter(b => b.status !== 'none').map(b => (
-                  <div key={b.weightId} className="flex items-center justify-between">
-                    <span>
-                      • {b.weightLabel} ({b.status === 'complete' ? 'Complete 100%' : 'Incomplete 50%'}):
-                    </span>
-                    <span className={b.status === 'complete' ? 'text-blue-300' : 'text-indigo-300'}>
-                      +{b.pointsEarned}
-                    </span>
-                  </div>
-                ))}
-                {pushedCount === 0 && (
-                  <div className="text-slate-500 italic">No blocks selected yet</div>
-                )}
-              </div>
-
-              <div className="flex items-center justify-between pt-2 border-t border-slate-800">
-                <span className="text-slate-300">Time Left Bonus ({scoreCalculation.timeLeftSeconds}s):</span>
-                <span className="font-mono font-bold text-emerald-400 text-sm">
-                  +{scoreCalculation.timeBonus} pts
-                </span>
-              </div>
-
-              <div className="flex items-center justify-between pt-2 border-t border-slate-800 font-bold">
-                <span className="text-white text-sm">Final Round 1 Score:</span>
-                <span className="font-mono text-base text-blue-400">
-                  {scoreCalculation.finalScore} pts
-                </span>
-              </div>
-            </div>
-
-            {/* Action Buttons */}
-            <div className="mt-6 space-y-3">
+              {/* PUBLISH SCORE BUTTON */}
               <button
-                type="button"
-                onClick={() => setIsPreviewModalOpen(true)}
-                disabled={!selectedSchoolId}
-                className="w-full py-3.5 px-4 bg-blue-600 hover:bg-blue-500 text-white font-display font-bold text-sm rounded-xl transition shadow-lg shadow-blue-600/30 flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
+                onClick={handlePublishScore}
+                disabled={timerStatus === 'running'}
+                className={`w-full py-3 px-4 rounded-xl font-display font-black text-sm uppercase tracking-wider flex items-center justify-center gap-2 shadow-lg transition ${
+                  timerStatus === 'running'
+                    ? 'bg-slate-800 text-slate-500 border border-slate-700 cursor-not-allowed'
+                    : isPublished
+                      ? 'bg-emerald-700 hover:bg-emerald-600 text-white border border-emerald-500 cursor-pointer'
+                      : 'bg-blue-600 hover:bg-blue-500 text-white shadow-blue-950/40 border border-blue-400 cursor-pointer'
+                }`}
               >
                 <Send className="w-4 h-4" />
-                <span>Score Preview & Publish</span>
+                <span>{isPublished ? 'UPDATE PUBLISHED SCORE' : 'PUBLISH SCORE'}</span>
               </button>
 
+              {/* NEXT TEAM BUTTON */}
               <button
-                type="button"
-                onClick={handleSaveDraft}
-                disabled={!selectedSchoolId}
-                className="w-full py-2.5 px-4 bg-slate-800 hover:bg-slate-700 text-slate-300 font-medium text-xs rounded-xl transition flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
+                onClick={handleNextTeam}
+                className={`w-full py-3.5 px-4 rounded-xl font-display font-black text-base flex items-center justify-center gap-2 shadow-md transition cursor-pointer ${
+                  isPublished
+                    ? 'bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 shadow-amber-950/40 border-2 border-amber-300 ring-2 ring-amber-500/50'
+                    : 'bg-slate-800 hover:bg-slate-700 text-amber-300 border-2 border-amber-500/40'
+                }`}
               >
-                <Save className="w-3.5 h-3.5" />
-                <span>Save Local Draft (Do Not Publish)</span>
+                <span>NEXT TEAM</span>
+                <ArrowRight className="w-4 h-4" />
               </button>
             </div>
 
-            {/* Fast workflow tip */}
-            <div className="mt-4 pt-3 border-t border-slate-800/80 text-[11px] text-slate-400 flex items-start gap-1.5">
-              <Info className="w-3.5 h-3.5 text-blue-400 shrink-0 mt-0.5" />
-              <span>
-                Publishing immediately updates the Arena LED screen, recalculates the official leaderboard, and logs an audit entry.
-              </span>
-            </div>
           </div>
 
-          {/* Official Rule Reference Box */}
-          <div className="bg-slate-900/90 border border-slate-800 rounded-2xl p-4 text-xs space-y-2">
-            <h4 className="font-bold text-white uppercase tracking-wider flex items-center gap-1.5 text-[11px]">
-              <Info className="w-3.5 h-3.5 text-blue-400" />
-              <span>Official BRL 2026 Rules - Round 1</span>
-            </h4>
-            <ul className="text-slate-400 space-y-1 list-disc list-inside text-[11px]">
-              <li>Time allocation: 120 seconds per run</li>
-              <li>Pushed completely inside designated box: 100% points</li>
-              <li>Any portion of block remains outside: 50% points</li>
-              <li>Time Bonus: 1 pt per unused second (Time Left)</li>
-              <li>Maximum possible score: 330 + 120 = 450 pts</li>
-            </ul>
-          </div>
         </div>
+
       </div>
 
-      {/* CONFIRMATION & SCORE PREVIEW MODAL */}
-      {isPreviewModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
-          <div className="bg-slate-900 border-2 border-blue-500 rounded-3xl p-6 sm:p-8 max-w-lg w-full shadow-2xl relative space-y-6">
-            
-            <div>
-              <div className="text-xs font-bold text-blue-400 uppercase tracking-wider">
-                SCORE PREVIEW & CONFIRMATION
-              </div>
-              <h3 className="text-2xl font-display font-black text-white mt-1">
-                Publish Round 1 Score
+      {/* 3. EDIT SCORE DISCREPANCY MODAL */}
+      {isEditModalOpen && (
+        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-slate-900 border-2 border-slate-700 rounded-2xl max-w-md w-full p-6 shadow-2xl space-y-4">
+            <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+              <h3 className="text-lg font-display font-bold text-white flex items-center gap-2">
+                <Edit3 className="w-4 h-4 text-amber-400" />
+                <span>Adjust Score / Discrepancy</span>
               </h3>
-              <p className="text-xs text-slate-400 mt-0.5">
-                Verify the calculation breakdown below before making this score live on the auditorium screen.
-              </p>
+              <button 
+                onClick={() => setIsEditModalOpen(false)}
+                className="text-slate-400 hover:text-white"
+              >
+                <X className="w-5 h-5" />
+              </button>
             </div>
 
-            {/* School details */}
-            <div className="bg-slate-950 p-4 rounded-xl border border-slate-800">
-              <div className="text-xs text-slate-400 uppercase font-mono">Competing Team</div>
-              <div className="text-lg font-bold text-white mt-0.5">{activeSchool?.name}</div>
-              <div className="text-sm text-blue-300 font-mono">
-                {activeSchool?.teamNumber} • {activeSchool?.teamName}
-              </div>
-            </div>
-
-            {/* Full Breakdown */}
-            <div className="space-y-3 bg-slate-950/60 p-4 rounded-xl border border-slate-800 text-sm">
-              <div className="flex justify-between items-center text-xs text-slate-400 font-semibold border-b border-slate-800 pb-2">
-                <span>COMPONENT</span>
-                <span>AWARDED</span>
-              </div>
-
-              {scoreCalculation.blocks.map(b => (
-                <div key={b.weightId} className="flex justify-between items-center text-xs">
-                  <span className="text-slate-300">
-                    {b.weightLabel} Block:
-                  </span>
-                  <span className={`font-mono font-bold ${b.status === 'none' ? 'text-slate-500' : 'text-white'}`}>
-                    {b.status === 'complete' ? `Complete (100%) = +${b.pointsEarned} pts` : b.status === 'incomplete' ? `Incomplete (50%) = +${b.pointsEarned} pts` : 'Not Pushed (0)'}
-                  </span>
+            <div className="space-y-3 text-xs">
+              <div>
+                <label className="block text-slate-400 font-mono mb-1">
+                  MANUAL TIME BONUS / TIME LEFT (SECONDS):
+                </label>
+                <input
+                  type="number"
+                  min="0"
+                  max="120"
+                  value={manualTimeBonus !== null ? manualTimeBonus : effectiveTimeLeft}
+                  onChange={(e) => setManualTimeBonus(Math.max(0, Math.min(120, Number(e.target.value))))}
+                  className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-white font-mono text-base focus:border-blue-500 focus:outline-none"
+                />
+                <div className="text-[11px] text-slate-500 mt-1">
+                  Overrides automatic timer calculation (0 - 120 pts).
                 </div>
-              ))}
-
-              <div className="flex justify-between items-center text-xs pt-2 border-t border-slate-800">
-                <span className="text-slate-300 font-semibold">Subtotal Block Points:</span>
-                <span className="font-mono font-bold text-blue-300">+{scoreCalculation.blockScore} pts</span>
               </div>
 
-              <div className="flex justify-between items-center text-xs">
-                <span className="text-slate-300 font-semibold">Time Bonus ({scoreCalculation.timeLeftSeconds}s left × 1):</span>
-                <span className="font-mono font-bold text-emerald-400">+{scoreCalculation.timeBonus} pts</span>
+              <div>
+                <label className="block text-slate-400 font-mono mb-1">
+                  EVALUATOR OPERATOR NOTES:
+                </label>
+                <textarea
+                  value={operatorNotes}
+                  onChange={(e) => setOperatorNotes(e.target.value)}
+                  placeholder="E.g., 700g block boundary checked by arena referee..."
+                  className="w-full bg-slate-950 border border-slate-700 rounded-xl p-2.5 text-white text-xs focus:border-blue-500 focus:outline-none h-20"
+                />
               </div>
 
-              <div className="flex justify-between items-center text-base pt-3 border-t-2 border-slate-700 font-bold">
-                <span className="text-white">FINAL ROUND 1 SCORE:</span>
-                <span className="text-2xl font-display font-black text-blue-400">
-                  {scoreCalculation.finalScore} PTS
+              <div className="bg-slate-950 p-3 rounded-xl border border-slate-800 text-xs flex justify-between items-center">
+                <span className="text-slate-400">Calculated Final Score:</span>
+                <span className="text-xl font-mono font-black text-amber-400">
+                  {scoreCalculation.blockScore + (manualTimeBonus !== null ? manualTimeBonus : effectiveTimeLeft)} PTS
                 </span>
               </div>
             </div>
 
-            {notes && (
-              <div className="text-xs text-slate-400 bg-slate-950 p-3 rounded-lg border border-slate-800">
-                <strong className="text-slate-300">Note:</strong> {notes}
-              </div>
-            )}
-
-            {/* Dialog Actions */}
-            <div className="flex items-center justify-end gap-3 pt-2">
+            <div className="flex items-center gap-2 pt-2 border-t border-slate-800">
               <button
-                type="button"
-                onClick={() => setIsPreviewModalOpen(false)}
-                className="px-4 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl text-xs font-semibold transition"
+                onClick={() => {
+                  setManualTimeBonus(null);
+                  setIsEditModalOpen(false);
+                }}
+                className="py-2 px-3 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl text-xs font-semibold"
               >
-                Back to Edit
+                Reset to Live Timer
               </button>
-
               <button
-                type="button"
-                onClick={handlePublishConfirmed}
-                className="px-6 py-2.5 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-xs font-bold transition shadow-lg shadow-blue-600/30 flex items-center gap-2"
+                onClick={() => setIsEditModalOpen(false)}
+                className="flex-1 py-2 px-4 bg-blue-600 hover:bg-blue-500 text-white font-semibold rounded-xl text-xs transition"
               >
-                <Check className="w-4 h-4" />
-                <span>Confirm & Publish Now</span>
+                Apply Adjustments
               </button>
             </div>
           </div>
         </div>
       )}
+
+      {/* 4. RESET RUN CONFIRMATION MODAL */}
+      {isResetConfirmOpen && (
+        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-slate-900 border-2 border-rose-600/60 rounded-2xl max-w-sm w-full p-5 shadow-2xl space-y-4">
+            <div className="flex items-center gap-3 text-rose-400">
+              <AlertTriangle className="w-6 h-6 shrink-0" />
+              <h3 className="text-base font-display font-bold text-white">
+                Reset Current Run?
+              </h3>
+            </div>
+
+            <p className="text-xs text-slate-300 leading-relaxed">
+              This will clear all block selections, restore the timer to <strong className="text-white">01:20</strong>, and reset the score for <strong className="text-amber-300">{activeSchool?.name || 'the active team'}</strong>.
+            </p>
+
+            <div className="flex items-center gap-2 pt-2 border-t border-slate-800">
+              <button
+                onClick={() => setIsResetConfirmOpen(false)}
+                className="flex-1 py-2 px-3 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl text-xs font-semibold transition"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleConfirmResetRun}
+                className="flex-1 py-2 px-3 bg-rose-600 hover:bg-rose-500 text-white rounded-xl text-xs font-bold transition"
+              >
+                Confirm Reset
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
     </div>
   );
 };
