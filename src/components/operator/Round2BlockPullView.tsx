@@ -12,9 +12,12 @@ import {
   Tv,
   Info,
   Minus,
-  Plus
+  Plus,
+  Play,
+  Square
 } from 'lucide-react';
 import { useCompetition } from '../../context/CompetitionContext';
+import { useArenaTimer } from '../../hooks/useArenaTimer';
 import { 
   OFFICIAL_BLOCK_WEIGHTS, 
   BLOCK_PULL_CONFIG, 
@@ -42,6 +45,30 @@ export const Round2BlockPullView: React.FC = () => {
   const [isPreviewModalOpen, setIsPreviewModalOpen] = useState<boolean>(false);
   const [feedbackMsg, setFeedbackMsg] = useState<{ text: string; type: 'success' | 'info' } | null>(null);
 
+  // Arena timer (shared with the HDMI screen). It only counts as this team's Round 2 run
+  // when it was started for Round 2 and for the team currently selected here.
+  const {
+    remainingSeconds,
+    formattedTime,
+    status: rawTimerStatus,
+    isUrgent,
+    start: startTimer,
+    stop: stopTimer,
+    reset: resetTimer
+  } = useArenaTimer(2);
+  const ownsTimer = state.arenaTimer?.round === 2 && state.arenaTimer?.schoolId === selectedSchoolId;
+  const timerStatus = ownsTimer ? rawTimerStatus : 'idle';
+  const isTimerRunning = timerStatus === 'running';
+  const timerFinished = timerStatus === 'stopped' || timerStatus === 'time_over';
+  const displaySeconds = ownsTimer ? remainingSeconds : 120;
+
+  // Once the operator types/slides a time by hand it overrides the frozen clock value.
+  const [manualTime, setManualTime] = useState<boolean>(false);
+  const setManualTimeLeft = (sec: number) => {
+    setManualTime(true);
+    setTimeLeftSeconds(sec);
+  };
+
   // Sync selected school with queue
   useEffect(() => {
     if (!selectedSchoolId && currentSchool) {
@@ -51,7 +78,9 @@ export const Round2BlockPullView: React.FC = () => {
     }
   }, [currentSchool, state.schools, selectedSchoolId]);
 
-  // Load existing draft or score
+  // Load existing draft or score. Keyed on this team's saved data (not the whole scores map)
+  // so another operator's or another team's update cannot wipe entries typed here.
+  const savedRound2Key = JSON.stringify(state.scores[selectedSchoolId]?.round2 ?? null);
   useEffect(() => {
     if (selectedSchoolId) {
       const existing = state.scores[selectedSchoolId]?.round2;
@@ -67,11 +96,18 @@ export const Round2BlockPullView: React.FC = () => {
         setNotes('');
       }
     }
-  }, [selectedSchoolId, state.scores]);
+  }, [selectedSchoolId, savedRound2Key]);
+
+  // Running: live seconds left. Ended (Stop / time over): the frozen seconds, unless the
+  // operator overrode them by hand. Otherwise: the value loaded from a saved draft/score.
+  const frozenSeconds = timerStatus === 'time_over' ? 0 : remainingSeconds;
+  const effectiveTimeLeft = isTimerRunning
+    ? remainingSeconds
+    : (timerFinished && !manualTime ? frozenSeconds : timeLeftSeconds);
 
   const scoreCalculation = calculateBlockPullScore(
     pulledBlockIds,
-    timeLeftSeconds,
+    effectiveTimeLeft,
     boundaryTouches
   );
 
@@ -91,6 +127,23 @@ export const Round2BlockPullView: React.FC = () => {
     setPulledBlockIds([]);
     setTimeLeftSeconds(0);
     setBoundaryTouches(0);
+    setManualTime(false);
+  };
+
+  const handleStartTimer = () => {
+    if (!selectedSchoolId) return;
+    handleReset();
+    startTimer(120, 2, selectedSchoolId);
+    setDisplayState('live_run');
+  };
+
+  const handleStopTimer = () => {
+    stopTimer();
+  };
+
+  const handleRestartTimer = () => {
+    resetTimer(120);
+    handleReset();
   };
 
   const handleSaveDraft = () => {
@@ -151,7 +204,7 @@ export const Round2BlockPullView: React.FC = () => {
               <span>Show on Arena Screen</span>
             </button>
             <button
-              onClick={advanceQueue}
+              onClick={() => { advanceQueue(); resetTimer(120); handleReset(); }}
               className="px-3.5 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition"
               title="Advance queue to next team"
             >
@@ -334,6 +387,67 @@ export const Round2BlockPullView: React.FC = () => {
             </div>
           </div>
 
+          {/* Arena Timer: Start / Stop the 120 second run (also drives the HDMI countdown) */}
+          <div className="bg-slate-900/90 border border-slate-800 rounded-2xl p-5 space-y-3">
+            <div className="flex items-center justify-between border-b border-slate-800 pb-2.5">
+              <div className="flex items-center space-x-2">
+                <Clock className="w-4 h-4 text-emerald-400" />
+                <h3 className="font-display font-bold text-white text-sm">Arena Timer</h3>
+              </div>
+              <span className="text-[11px] font-mono font-bold text-slate-400">
+                {isTimerRunning ? 'RUN IN PROGRESS' : timerFinished ? 'RUN ENDED' : 'READY TO START'}
+              </span>
+            </div>
+
+            <div className="flex items-center justify-between gap-4">
+              <div>
+                <div className={`text-5xl font-mono font-black tracking-tight ${
+                  isTimerRunning && isUrgent ? 'text-red-500' : isTimerRunning ? 'text-amber-400' : 'text-slate-100'
+                }`}>
+                  {formattedTime && ownsTimer ? formattedTime : '01:20'}
+                </div>
+                <div className="text-xs font-mono text-slate-400 mt-1">
+                  Time Left: {displaySeconds}s (Bonus: +{displaySeconds} pts)
+                </div>
+              </div>
+
+              <div className="flex-1 max-w-xs space-y-2">
+                {isTimerRunning ? (
+                  <button
+                    type="button"
+                    onClick={handleStopTimer}
+                    className="w-full py-3 bg-red-600 hover:bg-red-500 text-white font-display font-black text-lg rounded-xl border-2 border-red-400 flex items-center justify-center gap-2 transition"
+                  >
+                    <Square className="w-5 h-5 fill-white" />
+                    <span>STOP RUN</span>
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={handleStartTimer}
+                    disabled={!selectedSchoolId || timerFinished}
+                    className={`w-full py-3 font-display font-black text-lg rounded-xl flex items-center justify-center gap-2 transition ${
+                      timerFinished || !selectedSchoolId
+                        ? 'bg-slate-800 text-slate-500 border border-slate-700 cursor-not-allowed'
+                        : 'bg-emerald-600 hover:bg-emerald-500 text-white border-2 border-emerald-400'
+                    }`}
+                  >
+                    <Play className="w-5 h-5 fill-white" />
+                    <span>{timerFinished ? 'TIMER STOPPED' : 'START 120s RUN'}</span>
+                  </button>
+                )}
+                <button
+                  type="button"
+                  onClick={handleRestartTimer}
+                  className="w-full text-xs font-mono font-bold text-rose-400 hover:text-rose-300 flex items-center justify-center gap-1.5"
+                >
+                  <RotateCcw className="w-3.5 h-3.5" />
+                  <span>RESTART RUN</span>
+                </button>
+              </div>
+            </div>
+          </div>
+
           {/* Time Remaining (Bonus) and Boundary Touches (Penalty) in 2 columns */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
             
@@ -354,8 +468,8 @@ export const Round2BlockPullView: React.FC = () => {
               <div className="flex items-center justify-between">
                 <span className="text-xs text-slate-400">Seconds Unused:</span>
                 <span className="text-2xl font-display font-black text-emerald-400">
-                  {timeLeftSeconds}s
-                  <span className="text-xs font-normal text-slate-400 ml-1.5">(+{timeLeftSeconds} pts)</span>
+                  {effectiveTimeLeft}s
+                  <span className="text-xs font-normal text-slate-400 ml-1.5">(+{effectiveTimeLeft} pts)</span>
                 </span>
               </div>
 
@@ -364,9 +478,10 @@ export const Round2BlockPullView: React.FC = () => {
                 min="0"
                 max="120"
                 step="1"
-                value={timeLeftSeconds}
-                onChange={(e) => setTimeLeftSeconds(Number(e.target.value))}
-                className="w-full accent-emerald-500 h-2 bg-slate-950 rounded-lg cursor-pointer"
+                value={effectiveTimeLeft}
+                disabled={isTimerRunning}
+                onChange={(e) => setManualTimeLeft(Number(e.target.value))}
+                className="w-full accent-emerald-500 h-2 bg-slate-950 rounded-lg cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
               />
 
               <div className="flex flex-wrap gap-1.5 pt-1">
@@ -374,9 +489,10 @@ export const Round2BlockPullView: React.FC = () => {
                   <button
                     key={sec}
                     type="button"
-                    onClick={() => setTimeLeftSeconds(sec)}
-                    className={`px-2.5 py-1 rounded text-xs font-mono font-semibold transition border ${
-                      timeLeftSeconds === sec
+                    onClick={() => setManualTimeLeft(sec)}
+                    disabled={isTimerRunning}
+                    className={`px-2.5 py-1 rounded text-xs font-mono font-semibold transition border disabled:opacity-40 disabled:cursor-not-allowed ${
+                      effectiveTimeLeft === sec
                         ? 'bg-emerald-600 text-white border-emerald-500'
                         : 'bg-slate-950 text-slate-400 border-slate-800 hover:text-white'
                     }`}
@@ -528,7 +644,7 @@ export const Round2BlockPullView: React.FC = () => {
               <button
                 type="button"
                 onClick={() => setIsPreviewModalOpen(true)}
-                disabled={!selectedSchoolId}
+                disabled={!selectedSchoolId || isTimerRunning}
                 className="w-full py-3.5 px-4 bg-emerald-600 hover:bg-emerald-500 text-white font-display font-bold text-sm rounded-xl transition shadow-lg shadow-emerald-600/30 flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
               >
                 <Send className="w-4 h-4" />
@@ -538,7 +654,7 @@ export const Round2BlockPullView: React.FC = () => {
               <button
                 type="button"
                 onClick={handleSaveDraft}
-                disabled={!selectedSchoolId}
+                disabled={!selectedSchoolId || isTimerRunning}
                 className="w-full py-2.5 px-4 bg-slate-800 hover:bg-slate-700 text-slate-300 font-medium text-xs rounded-xl transition flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
               >
                 <Save className="w-3.5 h-3.5" />

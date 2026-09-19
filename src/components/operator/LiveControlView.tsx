@@ -250,7 +250,9 @@ export const LiveControlView: React.FC<LiveControlViewProps> = ({ setActiveTab }
                   className="w-full bg-slate-900 border border-slate-700 text-slate-200 text-xs rounded-lg px-2.5 py-1.5 focus:outline-none focus:border-amber-500"
                 >
                   <option value="">-- Choose Team --</option>
-                  {state.schools.filter(s => s.isActive).map((s) => (
+                  {state.schools
+                    .filter(s => s.isActive && (s.id === currentSchool?.id || !currentQueue.completedSchoolIds.includes(s.id)))
+                    .map((s) => (
                     <option key={s.id} value={s.id}>
                       {s.name} ({s.teamName})
                     </option>
@@ -554,9 +556,9 @@ export const LiveControlView: React.FC<LiveControlViewProps> = ({ setActiveTab }
               {completedSchools.map((school, index) => {
                 const teamScore = state.scores[school.id];
                 const scoreValue = state.currentRound === 1 
-                  ? teamScore?.round1?.calculatedScore 
-                  : state.currentRound === 2 
-                    ? teamScore?.round2?.calculatedScore 
+                  ? (teamScore?.round1?.finalScore ?? teamScore?.round1?.calculatedScore)
+                  : state.currentRound === 2
+                    ? (teamScore?.round2?.finalScore ?? teamScore?.round2?.calculatedScore)
                     : teamScore?.round3Score;
 
                 return (

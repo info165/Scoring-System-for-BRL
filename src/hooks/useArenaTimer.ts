@@ -14,33 +14,43 @@ export interface ArenaTimerHookReturn {
   status: 'idle' | 'running' | 'stopped' | 'time_over';
   isUrgent: boolean; // <= 10s and running
   isTimeOver: boolean;
-  start: (duration?: number) => void;
+  start: (duration?: number, round?: 1 | 2 | 3, schoolId?: string) => void;
   stop: () => void;
   reset: (duration?: number) => void;
   elapsedSeconds: number;
 }
 
-export function useArenaTimer(): ArenaTimerHookReturn {
-  const { 
-    state, 
-    startArenaTimer, 
-    stopArenaTimer, 
-    resetArenaTimer, 
-    currentSchool 
+// Pass `round` from an operator screen so it only sees runs started for its own round; a
+// timer that belongs to another round looks idle there. Display screens pass nothing and
+// simply follow whichever run is active.
+export function useArenaTimer(round?: 1 | 2 | 3): ArenaTimerHookReturn {
+  const {
+    state,
+    startArenaTimer,
+    stopArenaTimer,
+    resetArenaTimer,
+    currentSchool
   } = useCompetition();
 
-  const arenaTimer = state.arenaTimer || {
-    status: 'idle',
+  const idleTimer = {
+    status: 'idle' as const,
     totalDurationSeconds: 120,
     remainingSeconds: 120,
     startTimestamp: null,
     stopTimestamp: null,
-    round: 1,
+    round: round ?? 1,
     schoolId: currentSchool?.id || null
   };
+  const storedTimer = state.arenaTimer || idleTimer;
+  const arenaTimer = round !== undefined && storedTimer.round !== round ? idleTimer : storedTimer;
 
   const calculateRemaining = (): number => {
-    if (state.activeRun && (state.activeRun.status === 'STOPPED' || state.activeRun.status === 'PUBLISHED')) {
+    // The Round 1 run record only describes the timer while the timer belongs to that round.
+    if (
+      state.activeRun &&
+      state.activeRun.round === arenaTimer.round &&
+      (state.activeRun.status === 'STOPPED' || state.activeRun.status === 'PUBLISHED')
+    ) {
       return Math.max(0, state.activeRun.timeLeftSeconds);
     }
     if (arenaTimer.status === 'idle') {
@@ -96,12 +106,12 @@ export function useArenaTimer(): ArenaTimerHookReturn {
     return () => clearInterval(interval);
   }, [arenaTimer.status, arenaTimer.startTimestamp, arenaTimer.totalDurationSeconds, stopArenaTimer]);
 
-  const handleStart = (duration: number = 120) => {
+  const handleStart = (duration: number = 120, round: 1 | 2 | 3 = 1, schoolId?: string) => {
     unlockAudioContext();
     playArenaStartSound();
     warnedRef.current = false;
     overRef.current = false;
-    startArenaTimer(1, currentSchool?.id, duration);
+    startArenaTimer(round, schoolId || currentSchool?.id, duration);
   };
 
   const handleStop = () => {

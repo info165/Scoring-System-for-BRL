@@ -120,10 +120,12 @@ export async function saveCompetitionStateToFirestore(state: CompetitionState): 
     // 1. Write the unified master state document for ultra-fast snapshot updates across devices.
     // No merge option: `state` is always the complete CompetitionState, and merge:true would
     // deep-merge nested map fields (e.g. `scores`), leaving deleted entries as orphaned leftovers.
-    await setDoc(competitionDocRef, {
+    // Firestore rejects `undefined` anywhere in the document; a JSON round-trip drops those keys.
+    const cleanState = JSON.parse(JSON.stringify({
       ...state,
       lastUpdated: Date.now()
-    });
+    }));
+    await setDoc(competitionDocRef, cleanState);
 
     // 2. Also update collections for schools, scores, matches, and audit logs
     // Using batch writes for consistency where applicable

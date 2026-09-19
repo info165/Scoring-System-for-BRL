@@ -60,7 +60,7 @@ export const Round1BlockPushView: React.FC = () => {
     start: startTimer,
     stop: stopTimer,
     reset: resetTimer
-  } = useArenaTimer();
+  } = useArenaTimer(1);
 
   // Evaluator Mode view state (true by default)
   const [evaluatorMode, setEvaluatorMode] = useState<boolean>(true);

@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useEffect, useState, useCallback, useMemo } from 'react';
+import React, { createContext, useContext, useEffect, useState, useCallback, useMemo, useRef } from 'react';
 import { 
   CompetitionState, 
   School, 
@@ -402,6 +402,23 @@ const defaultInitialState: CompetitionState = {
   lastUpdated: 0
 };
 
+// Round 1 block rows can arrive with only weightId + status; fill in the label and points
+// so every screen (HDMI result, history, exports) reads the same complete shape.
+const normalizeBlockEntries = (blocks: any[] | undefined): BlockPushScore['blocks'] =>
+  (blocks || []).map((b) => {
+    const def = OFFICIAL_BLOCK_WEIGHTS.find(w => w.id === b.weightId);
+    const status = b.status || 'none';
+    const pointsEarned = def
+      ? (status === 'complete' ? def.fullPoints : status === 'incomplete' ? def.incompletePoints : 0)
+      : (b.pointsEarned ?? b.pointsAwarded ?? 0);
+    return {
+      weightId: b.weightId,
+      weightLabel: def?.label || b.weightLabel || b.weightId,
+      status,
+      pointsEarned
+    };
+  });
+
 const CompetitionContext = createContext<CompetitionContextType | null>(null);
 
 export const CompetitionProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
@@ -435,11 +452,25 @@ export const CompetitionProvider: React.FC<{ children: React.ReactNode }> = ({ c
   const [isFirebaseSyncing, setIsFirebaseSyncing] = useState<boolean>(false);
   const [lastCloudSync, setLastCloudSync] = useState<string | null>(null);
 
+  // Always holds the newest committed state, even between renders.
+  const stateRef = useRef<CompetitionState>(state);
+  stateRef.current = state;
+
   const commitState = useCallback((newState: CompetitionState, allowUndo: boolean = true) => {
+    // Callers build newState from the render-time `state`. When several handlers commit in the
+    // same tick, the later ones would overwrite the earlier ones with stale data. Apply only the
+    // top-level fields this caller actually changed on top of the latest committed state.
+    const merged: CompetitionState = { ...stateRef.current };
+    (Object.keys(newState) as (keyof CompetitionState)[]).forEach((key) => {
+      if (newState[key] !== state[key]) {
+        (merged as any)[key] = newState[key];
+      }
+    });
     const stateWithTimestamp: CompetitionState = {
-      ...newState,
+      ...merged,
       lastUpdated: Date.now()
     };
+    stateRef.current = stateWithTimestamp;
 
     if (allowUndo) {
       setHistoryStack(prev => [...prev.slice(-15), state]);
@@ -736,7 +767,22 @@ export const CompetitionProvider: React.FC<{ children: React.ReactNode }> = ({ c
   const advanceQueue = useCallback(() => {
     const roundKey: 1 | 2 = state.currentRound === 3 ? 1 : state.currentRound;
     const currentQ = state.runQueue[roundKey];
-    if (!currentQ || !currentQ.currentSchoolId) return;
+    if (!currentQ) return;
+
+    // Nobody is playing yet (fresh start or after a reset): bring the first queued team on.
+    if (!currentQ.currentSchoolId) {
+      const [first, ...rest] = currentQ.queueSchoolIds;
+      if (!first) return;
+      commitState({
+        ...state,
+        runQueue: {
+          ...state.runQueue,
+          [roundKey]: { ...currentQ, currentSchoolId: first, queueSchoolIds: rest }
+        },
+        lastUpdated: Date.now()
+      });
+      return;
+    }
 
     const oldCurrent = currentQ.currentSchoolId;
     const nextCurrent = currentQ.queueSchoolIds[0] || null;
@@ -831,7 +877,28 @@ export const CompetitionProvider: React.FC<{ children: React.ReactNode }> = ({ c
     const currentQ = state.runQueue[roundKey];
     if (!currentQ) return;
 
-    const filteredQueue = currentQ.queueSchoolIds.filter(id => id !== schoolId);
+    // The team being replaced must not disappear: a scored team is completed, an unscored one
+    // goes back to the front of the queue.
+    const previous = currentQ.currentSchoolId;
+    const prevRecord = previous ? state.scores[previous] : null;
+    const prevScored = previous
+      ? !!(roundKey === 1
+          ? prevRecord?.round1 && !prevRecord.round1.isDraft
+          : prevRecord?.round2 && !prevRecord.round2.isDraft)
+      : false;
+    const returning = previous && previous !== schoolId;
+
+    // Picking a completed team again is a re-run: it leaves the completed list.
+    const completed = currentQ.completedSchoolIds.filter(id => id !== schoolId);
+    let queue = currentQ.queueSchoolIds.filter(id => id !== schoolId);
+    if (returning && previous) {
+      if (prevScored) {
+        if (!completed.includes(previous)) completed.push(previous);
+      } else if (!queue.includes(previous)) {
+        queue = [previous, ...queue];
+      }
+    }
+
     commitState({
       ...state,
       runQueue: {
@@ -839,7 +906,8 @@ export const CompetitionProvider: React.FC<{ children: React.ReactNode }> = ({ c
         [roundKey]: {
           ...currentQ,
           currentSchoolId: schoolId,
-          queueSchoolIds: filteredQueue
+          queueSchoolIds: queue,
+          completedSchoolIds: completed
         }
       },
       lastUpdated: Date.now()
@@ -879,6 +947,7 @@ export const CompetitionProvider: React.FC<{ children: React.ReactNode }> = ({ c
           ...teamScore,
           round1: {
             ...scoreData,
+            blocks: normalizeBlockEntries(scoreData.blocks),
             isDraft: true
           }
         }
@@ -895,6 +964,8 @@ export const CompetitionProvider: React.FC<{ children: React.ReactNode }> = ({ c
     
     const publishedScore: BlockPushScore = {
       ...scoreData,
+      blocks: normalizeBlockEntries(scoreData.blocks),
+      calculatedScore: scoreData.finalScore,
       timeAllocatedSeconds: 120,
       timeUsedSeconds: Math.max(0, 120 - scoreData.timeLeftSeconds),
       publicationStatus: 'PUBLISHED',
@@ -1089,8 +1160,35 @@ export const CompetitionProvider: React.FC<{ children: React.ReactNode }> = ({ c
       operatorNote: publishedScore.notes
     };
 
+    const publishedResult: PublishedRunResult = {
+      round: 2,
+      schoolId,
+      schoolName: school?.name || 'Unknown School',
+      teamName: school?.teamName || 'Unknown Team',
+      teamNumber: school?.teamNumber || '',
+      city: school?.city || '',
+      eventName: state.eventName || 'Bharat Robotics League',
+      year: state.year || '2026',
+      timeAllocated: 120,
+      timeLeft: publishedScore.timeLeftSeconds,
+      timeUsed: Math.max(0, 120 - publishedScore.timeLeftSeconds),
+      timeBonus: publishedScore.timeBonus,
+      penaltyPoints: publishedScore.boundaryPenalty,
+      blockScore: publishedScore.blockScore,
+      finalScore: publishedScore.finalScore,
+      publicationStatus: 'PUBLISHED',
+      publishedAt: publishedScore.publishedAt || new Date().toISOString(),
+      round2Details: {
+        pulledBlocks: publishedScore.pulledBlockIds,
+        boundaryTouches: publishedScore.boundaryTouches,
+        boundaryPenalty: publishedScore.boundaryPenalty
+      }
+    };
+
     commitState({
       ...state,
+      displayState: 'result_reveal',
+      lastPublishedResult: publishedResult,
       scores: {
         ...state.scores,
         [schoolId]: {
@@ -1280,18 +1378,17 @@ export const CompetitionProvider: React.FC<{ children: React.ReactNode }> = ({ c
       id: newId
     };
 
+    const addToQueue = (q: typeof state.runQueue[1]) =>
+      !q.currentSchoolId && q.queueSchoolIds.length === 0
+        ? { ...q, currentSchoolId: newId }
+        : { ...q, queueSchoolIds: [...q.queueSchoolIds, newId] };
+
     commitState({
       ...state,
       schools: [...state.schools, newSchool],
       runQueue: {
-        1: {
-          ...state.runQueue[1],
-          queueSchoolIds: [...state.runQueue[1].queueSchoolIds, newId]
-        },
-        2: {
-          ...state.runQueue[2],
-          queueSchoolIds: [...state.runQueue[2].queueSchoolIds, newId]
-        }
+        1: addToQueue(state.runQueue[1]),
+        2: addToQueue(state.runQueue[2])
       },
       lastUpdated: Date.now()
     });
@@ -1310,6 +1407,17 @@ export const CompetitionProvider: React.FC<{ children: React.ReactNode }> = ({ c
     const updatedScores = { ...state.scores };
     delete updatedScores[id];
 
+    // If the deleted team was on stage, the next waiting team steps up instead of leaving it empty.
+    const removeFromQueue = (q: typeof state.runQueue[1]) => {
+      const queue = q.queueSchoolIds.filter(x => x !== id);
+      const wasCurrent = q.currentSchoolId === id;
+      return {
+        currentSchoolId: wasCurrent ? (queue[0] || null) : q.currentSchoolId,
+        queueSchoolIds: wasCurrent ? queue.slice(1) : queue,
+        completedSchoolIds: q.completedSchoolIds.filter(x => x !== id)
+      };
+    };
+
     const updatedRobotWarMatches = state.robotWarMatches.filter(
       m => m.teamAId !== id && m.teamBId !== id
     );
@@ -1322,16 +1430,8 @@ export const CompetitionProvider: React.FC<{ children: React.ReactNode }> = ({ c
       robotWarMatches: updatedRobotWarMatches,
       activeRobotWarMatchId: activeMatchRemoved ? null : state.activeRobotWarMatchId,
       runQueue: {
-        1: {
-          currentSchoolId: state.runQueue[1].currentSchoolId === id ? null : state.runQueue[1].currentSchoolId,
-          queueSchoolIds: state.runQueue[1].queueSchoolIds.filter(x => x !== id),
-          completedSchoolIds: state.runQueue[1].completedSchoolIds.filter(x => x !== id)
-        },
-        2: {
-          currentSchoolId: state.runQueue[2].currentSchoolId === id ? null : state.runQueue[2].currentSchoolId,
-          queueSchoolIds: state.runQueue[2].queueSchoolIds.filter(x => x !== id),
-          completedSchoolIds: state.runQueue[2].completedSchoolIds.filter(x => x !== id)
-        }
+        1: removeFromQueue(state.runQueue[1]),
+        2: removeFromQueue(state.runQueue[2])
       },
       lastUpdated: Date.now()
     });
@@ -1504,8 +1604,8 @@ export const CompetitionProvider: React.FC<{ children: React.ReactNode }> = ({ c
         status: 'scheduled'
       })),
       runQueue: {
-        1: { currentSchoolId: null, queueSchoolIds: activeSchoolIds, completedSchoolIds: [] },
-        2: { currentSchoolId: null, queueSchoolIds: activeSchoolIds, completedSchoolIds: [] }
+        1: { currentSchoolId: activeSchoolIds[0] || null, queueSchoolIds: activeSchoolIds.slice(1), completedSchoolIds: [] },
+        2: { currentSchoolId: activeSchoolIds[0] || null, queueSchoolIds: activeSchoolIds.slice(1), completedSchoolIds: [] }
       },
       grandWinnerSchoolId: null,
       lastUpdated: Date.now()
