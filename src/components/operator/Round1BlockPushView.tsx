@@ -99,43 +99,54 @@ export const Round1BlockPushView: React.FC = () => {
     }
   }, [currentSchool, state.schools, selectedSchoolId]);
 
-  // Load existing draft or published score when team changes
+  // Marks on screen. A run that is under way (or just stopped) is the source of truth; otherwise
+  // the saved score is shown. Keyed on the data itself, not the whole scores map, so unrelated
+  // saves from other operators or tabs cannot reset what is on screen. An official score is never
+  // used as the starting point of a new run.
+  const savedRound1Key = JSON.stringify(state.scores[selectedSchoolId]?.round1 ?? null);
+  const liveRun = state.activeRun;
+  const liveRunIsThisTeams = !!liveRun && !!selectedSchoolId && liveRun.schoolId === selectedSchoolId;
+  const liveRunKey = liveRunIsThisTeams ? JSON.stringify({ s: liveRun!.status, b: liveRun!.blocks }) : 'none';
   useEffect(() => {
-    if (selectedSchoolId) {
-      const existing = state.scores[selectedSchoolId]?.round1;
-      if (existing) {
-        const statuses: Record<string, PushBlockStatus> = {
-          '200g': 'none',
-          '500g': 'none',
-          '700g': 'none',
-          '1kg': 'none',
-          '2kg': 'none',
-          '4kg': 'none',
-        };
-        if (existing.blocks && Array.isArray(existing.blocks)) {
-          existing.blocks.forEach(b => {
-            if (statuses[b.weightId] !== undefined) {
-              statuses[b.weightId] = b.status;
-            }
-          });
-        }
-        setBlockStatuses(statuses);
-        setOperatorNotes(existing.notes || '');
-      } else {
-        // Reset defaults
-        setBlockStatuses({
-          '200g': 'none',
-          '500g': 'none',
-          '700g': 'none',
-          '1kg': 'none',
-          '2kg': 'none',
-          '4kg': 'none',
-        });
-        setOperatorNotes('');
-        setManualTimeBonus(null);
-      }
+    if (!selectedSchoolId) return;
+    const none: Record<string, PushBlockStatus> = {
+      '200g': 'none',
+      '500g': 'none',
+      '700g': 'none',
+      '1kg': 'none',
+      '2kg': 'none',
+      '4kg': 'none',
+    };
+
+    if (liveRunIsThisTeams && (liveRun!.status === 'RUNNING' || liveRun!.status === 'STOPPED')) {
+      setBlockStatuses({ ...none, ...liveRun!.blocks });
+      return;
     }
-  }, [selectedSchoolId, state.scores]);
+    if (liveRunIsThisTeams && liveRun!.status === 'READY') {
+      setBlockStatuses(none);
+      setOperatorNotes('');
+      setManualTimeBonus(null);
+      return;
+    }
+
+    const existing = state.scores[selectedSchoolId]?.round1;
+    if (existing) {
+      const statuses = { ...none };
+      if (existing.blocks && Array.isArray(existing.blocks)) {
+        existing.blocks.forEach(b => {
+          if (statuses[b.weightId] !== undefined) {
+            statuses[b.weightId] = b.status;
+          }
+        });
+      }
+      setBlockStatuses(statuses);
+      setOperatorNotes(existing.notes || '');
+    } else {
+      setBlockStatuses(none);
+      setOperatorNotes('');
+      setManualTimeBonus(null);
+    }
+  }, [selectedSchoolId, savedRound1Key, liveRunKey]);
 
   // Run state logic:
   // - idle: READY TO START (Time bonus is inactive = 0 pts)
@@ -164,6 +175,9 @@ export const Round1BlockPushView: React.FC = () => {
   const activeSchool = state.schools.find(s => s.id === selectedSchoolId);
   const existingScore = activeSchool ? state.scores[activeSchool.id]?.round1 : null;
   const isPublished = !!(existingScore && !existingScore.isDraft);
+  // An official score exists and this team is being run again; the official score stays untouched
+  // until the new score is published.
+  const isRerunInProgress = isPublished && liveRunIsThisTeams && (liveRun!.status === 'RUNNING' || liveRun!.status === 'STOPPED');
 
   // Authoritative calculation
   const calculatedBlockScore = activeInputBlocks.reduce((sum, item) => {
@@ -249,6 +263,9 @@ export const Round1BlockPushView: React.FC = () => {
 
   // Timer START
   const handleStartTimer = () => {
+    setBlockStatuses({ '200g': 'none', '500g': 'none', '700g': 'none', '1kg': 'none', '2kg': 'none', '4kg': 'none' });
+    setOperatorNotes('');
+    setManualTimeBonus(null);
     startTimer(120);
     startActiveRun(selectedSchoolId, 1, currentUser);
   };
@@ -702,14 +719,18 @@ export const Round1BlockPushView: React.FC = () => {
             <div className="flex items-center justify-between border-b border-slate-800 pb-2.5">
               <div>
                 <span className="text-xs font-mono font-bold text-slate-300 uppercase tracking-wider block">
-                  {isPublished 
+                  {isRerunInProgress
+                    ? 'RE-RUN IN PROGRESS'
+                    : isPublished 
                     ? 'OFFICIAL PUBLISHED SCORE' 
                     : (timerStatus === 'stopped' || isTimeOver)
                       ? 'SCORE REVIEW & CONFIRMATION'
                       : 'LIVE SCORE PREVIEW'}
                 </span>
                 <span className="text-[11px] text-slate-400">
-                  {isPublished
+                  {isRerunInProgress
+                    ? `Official score ${existingScore?.finalScore} stays on the leaderboard until you press UPDATE PUBLISHED SCORE`
+                    : isPublished
                     ? 'Live on Arena Secondary Display & Leaderboard'
                     : (timerStatus === 'stopped' || isTimeOver)
                       ? 'Run stopped. Review before publishing.'
@@ -719,7 +740,11 @@ export const Round1BlockPushView: React.FC = () => {
                 </span>
               </div>
 
-              {isPublished ? (
+              {isRerunInProgress ? (
+                <span className="px-2.5 py-1 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/40 text-[10px] font-mono font-black uppercase tracking-wider flex items-center gap-1">
+                  <span>RE-RUN (NOT OFFICIAL YET)</span>
+                </span>
+              ) : isPublished ? (
                 <span className="px-2.5 py-1 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 text-[10px] font-mono font-black uppercase tracking-wider flex items-center gap-1">
                   <CheckCircle2 className="w-3 h-3 text-emerald-400" />
                   <span>PUBLISHED</span>
@@ -768,7 +793,7 @@ export const Round1BlockPushView: React.FC = () => {
             <div className="bg-gradient-to-r from-blue-950/80 via-slate-950 to-blue-950/80 border-2 border-blue-500/50 rounded-xl p-3.5 flex items-center justify-between">
               <div>
                 <div className="text-[11px] font-mono font-bold text-blue-300 uppercase tracking-wider">
-                  {isPublished ? 'OFFICIAL SCORE' : 'CALCULATED SCORE'}
+                  {isPublished && !isRerunInProgress ? 'OFFICIAL SCORE' : 'CALCULATED SCORE'}
                 </div>
                 <div className="text-xs text-slate-400">
                   {scoreCalculation.blockScore} (Blocks) + {scoreCalculation.timeBonus} (Time Bonus)

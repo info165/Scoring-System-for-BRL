@@ -222,4 +222,7 @@ export interface CompetitionState {
   activeRun?: ActiveRunState;
   lastPublishedResult?: PublishedRunResult | null;
   lastUpdated: number;
+  // Identifies the browser tab that made the most recent save, so Undo can tell its own saves from
+  // changes made by anyone else.
+  lastWriter?: string;
 }

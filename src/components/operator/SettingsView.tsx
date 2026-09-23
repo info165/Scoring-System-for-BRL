@@ -25,7 +25,6 @@ export const SettingsView: React.FC = () => {
   const { 
     state, 
     resetAllScores, 
-    loadDemoSchools, 
     clearAllSchools, 
     setCompetitionStatus,
     importState,
@@ -60,7 +59,18 @@ export const SettingsView: React.FC = () => {
     reader.onload = (event) => {
       try {
         const parsed = JSON.parse(event.target?.result as string);
-        if (parsed && parsed.schools && parsed.scores) {
+        const looksValid =
+          parsed &&
+          typeof parsed.eventName === 'string' &&
+          Array.isArray(parsed.schools) &&
+          parsed.scores && typeof parsed.scores === 'object' && !Array.isArray(parsed.scores);
+        if (looksValid) {
+          const proceed = window.confirm(
+            'Replace ALL current data with this backup?\n\n' +
+            'The file contains ' + parsed.schools.length + ' team(s). The current ' + state.schools.length +
+            ' team(s), all scores and the score history will be overwritten on every screen. This cannot be undone.'
+          );
+          if (!proceed) return;
           importState(parsed);
           setSuccessMsg('State successfully imported and synchronized across all active displays.');
           setTimeout(() => setSuccessMsg(null), 4000);
@@ -328,22 +338,6 @@ export const SettingsView: React.FC = () => {
                 className="mt-4 w-full py-2 bg-rose-950/60 hover:bg-rose-900 text-rose-300 border border-rose-800/60 font-bold text-xs rounded-lg transition"
               >
                 Reset Scores
-              </button>
-            </div>
-
-            {/* Reload Demo Dataset */}
-            <div className="bg-slate-950/80 border border-slate-800 rounded-xl p-4 flex flex-col justify-between">
-              <div>
-                <h4 className="text-xs font-bold text-white">Reload 10-Team Demo</h4>
-                <p className="text-[11px] text-slate-400 mt-1">
-                  Re-instates realistic inter-school participants, scores, and matchups for live demo testing.
-                </p>
-              </div>
-              <button
-                onClick={loadDemoSchools}
-                className="mt-4 w-full py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 font-bold text-xs rounded-lg transition"
-              >
-                Reload Demo Preset
               </button>
             </div>
 

@@ -10,8 +10,7 @@ import {
   Users, 
   Database,
   Building,
-  MapPin,
-  RefreshCw
+  MapPin
 } from 'lucide-react';
 import { useCompetition } from '../../context/CompetitionContext';
 import { School } from '../../types';
@@ -22,7 +21,6 @@ export const SchoolsView: React.FC = () => {
     addSchool, 
     editSchool, 
     deleteSchool, 
-    loadDemoSchools, 
     clearAllSchools 
   } = useCompetition();
 
@@ -150,15 +148,6 @@ export const SchoolsView: React.FC = () => {
 
         <div className="flex flex-wrap items-center gap-2">
           <button
-            onClick={loadDemoSchools}
-            className="flex items-center space-x-1.5 px-3 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 text-xs font-semibold rounded-xl transition"
-            title="Reload realistic 10-team demo dataset"
-          >
-            <RefreshCw className="w-3.5 h-3.5 text-cyan-400" />
-            <span>Reload Demo Data</span>
-          </button>
-
-          <button
             onClick={() => setIsConfirmClearAll(true)}
             className="flex items-center space-x-1.5 px-3 py-2 bg-rose-950/40 hover:bg-rose-900/60 text-rose-300 border border-rose-900/50 text-xs font-semibold rounded-xl transition"
           >
@@ -173,16 +162,6 @@ export const SchoolsView: React.FC = () => {
             <Plus className="w-4 h-4" />
             <span>Add School</span>
           </button>
-        </div>
-      </div>
-
-      {/* Notice on Demo Data */}
-      <div className="p-3 bg-amber-500/10 border border-amber-500/30 rounded-xl flex items-center justify-between text-xs text-amber-300">
-        <div className="flex items-center space-x-2">
-          <span className="font-bold px-2 py-0.5 rounded bg-amber-500/20 uppercase tracking-wider text-[10px]">
-            DEMO DATA
-          </span>
-          <span>Sample schools are preloaded for demonstration and simulation purposes. Replace or edit them with official participants anytime.</span>
         </div>
       </div>
 
@@ -552,7 +531,7 @@ export const SchoolsView: React.FC = () => {
               <h4 className="text-base font-bold text-white">Clear All Master Records?</h4>
             </div>
             <p className="text-xs text-slate-300">
-              This will remove all participating schools, match queues, and scores. You can re-populate with demo data anytime.
+              This will remove all participating schools, match queues, and scores. This cannot be undone.
             </p>
             <div className="flex items-center justify-end space-x-2 pt-2">
               <button

@@ -16,7 +16,6 @@ import {
   PushBlockStatus,
   AppUser
 } from '../types';
-import { INITIAL_DEMO_SCHOOLS, INITIAL_PRESET_MATCHES } from '../data/demoSchools';
 import { 
   OFFICIAL_BLOCK_WEIGHTS,
   BLOCK_PUSH_CONFIG,
@@ -30,12 +29,24 @@ import {
   initFirebaseAuth, 
   testConnection, 
   subscribeToCompetitionState, 
-  saveCompetitionStateToFirestore, 
-  fetchCompetitionStateFromFirestore 
+  saveCompetitionStateToFirestore,
+  loadCompetitionStateFromServer,
+  firebaseConfig
 } from '../lib/firebase';
 
-const STORAGE_KEY = 'BRL_2026_COMPETITION_STATE_V3';
-const SYNC_CHANNEL_NAME = 'BRL_2026_SYNC_CHANNEL';
+// Browser copies are namespaced by database, so a copy saved while pointing at one database can
+// never be mistaken for (or pushed into) another.
+const DB_KEY = firebaseConfig.firestoreDatabaseId || '(default)';
+const STORAGE_KEY = `BRL_2026_COMPETITION_STATE_V3::${DB_KEY}`;
+const SYNC_CHANNEL_NAME = `BRL_2026_SYNC_CHANNEL::${DB_KEY}`;
+
+export type CloudStatus = 'loading' | 'ready' | 'error';
+
+// Unique per open tab. Every save is stamped with it, which lets Undo detect changes made by anyone else.
+const SESSION_ID: string =
+  typeof crypto !== 'undefined' && 'randomUUID' in crypto
+    ? crypto.randomUUID()
+    : 'tab_' + Math.random().toString(36).slice(2) + Date.now().toString(36);
 
 export interface LeaderboardRow {
   rank: number;
@@ -55,6 +66,8 @@ interface CompetitionContextType {
   state: CompetitionState;
   leaderboard: LeaderboardRow[];
   hasActiveTie: boolean;
+  cloudStatus: CloudStatus;
+  cloudError: string | null;
   tiedRanks: number[];
   currentSchool: School | null;
   upNextSchool: School | null;
@@ -92,7 +105,6 @@ interface CompetitionContextType {
   addSchool: (school: Omit<School, 'id'>) => void;
   editSchool: (id: string, updates: Partial<School>) => void;
   deleteSchool: (id: string) => void;
-  loadDemoSchools: () => void;
   clearAllSchools: () => void;
   
   // Winner Mode
@@ -105,7 +117,9 @@ interface CompetitionContextType {
   resetAllCompetitionData: () => void;
   resetAllScores: () => void;
   importState: (newState: CompetitionState) => void;
-  undoLastAction: () => void;
+  undoLastAction: () => Promise<void>;
+  undoNotice: string | null;
+  dismissUndoNotice: () => void;
   canUndo: boolean;
   
   // View mode helper
@@ -166,51 +180,9 @@ export const DEFAULT_ARENA_TIMER: ArenaTimerState = {
   schoolId: null
 };
 
-// Initial demo score records pre-calculated with the official BRL 2026 rules
-const samplePushDPS = calculateBlockPushScore(
-  [
-    { weightId: '4kg', status: 'complete' }, // 100
-    { weightId: '2kg', status: 'complete' }  // 80
-  ],
-  25 // Time left = 25s -> Bonus = 25
-);
-
-const samplePullDPS = calculateBlockPullScore(
-  ['2kg', '1kg', '500g'], // 80 + 60 + 30 = 170
-  30, // Time left = 30s -> Bonus = 30
-  1 // 1 touch -> Penalty = 5
-); // 170 + 30 - 5 = 195
-
-const samplePushBombay = calculateBlockPushScore(
-  [
-    { weightId: '1kg', status: 'complete' },  // 60
-    { weightId: '700g', status: 'complete' }, // 40
-    { weightId: '200g', status: 'complete' }  // 20
-  ],
-  35 // Time left = 35s -> Bonus = 35
-); // 120 + 35 = 155
-
-const samplePullBombay = calculateBlockPullScore(
-  ['2kg', '1kg'], // 80 + 60 = 140
-  25, // Time left = 25s -> Bonus = 25
-  1 // 1 touch -> Penalty = 5
-); // 140 + 25 - 5 = 160
-
-const samplePushKVPowai = calculateBlockPushScore(
-  [
-    { weightId: '2kg', status: 'complete' },   // 80
-    { weightId: '500g', status: 'complete' },  // 30
-    { weightId: '4kg', status: 'incomplete' }  // 50 (100 * 50%)
-  ],
-  20 // Time left = 20s -> Bonus = 20
-); // 160 + 20 = 180
-
-const samplePullKVPowai = calculateBlockPullScore(
-  ['4kg', '700g'], // 100 + 40 = 140
-  15, // Time left = 15s -> Bonus = 15
-  0 // 0 touches
-); // 140 + 15 = 155
-
+// The built-in starting point is an EMPTY tournament. It must never contain demo schools or
+// scores: any code path that ends up writing this object to the cloud would otherwise
+// replace real data with fake data.
 const defaultInitialState: CompetitionState = {
   eventName: 'Bharat Robotics League',
   year: '2026',
@@ -219,183 +191,16 @@ const defaultInitialState: CompetitionState = {
   currentRound: 1,
   displayState: 'live_run',
   leaderboardFilter: 'all',
-  activeRobotWarMatchId: 'match_1',
+  activeRobotWarMatchId: null,
   grandWinnerSchoolId: null,
   runQueue: {
-    1: {
-      currentSchoolId: 'sch_delhi_public',
-      queueSchoolIds: [
-        'sch_mothers_int', 
-        'sch_bombay_scottish', 
-        'sch_kv_iit_powai', 
-        'sch_nps_blr', 
-        'sch_modern_school', 
-        'sch_st_xaviers_kol', 
-        'sch_doon_school', 
-        'sch_hps_begumpet', 
-        'sch_dav_chennai'
-      ],
-      completedSchoolIds: []
-    },
-    2: {
-      currentSchoolId: 'sch_delhi_public',
-      queueSchoolIds: [
-        'sch_mothers_int', 
-        'sch_bombay_scottish', 
-        'sch_kv_iit_powai', 
-        'sch_nps_blr', 
-        'sch_modern_school', 
-        'sch_st_xaviers_kol', 
-        'sch_doon_school', 
-        'sch_hps_begumpet', 
-        'sch_dav_chennai'
-      ],
-      completedSchoolIds: []
-    }
+    1: { currentSchoolId: null, queueSchoolIds: [], completedSchoolIds: [] },
+    2: { currentSchoolId: null, queueSchoolIds: [], completedSchoolIds: [] }
   },
-  schools: INITIAL_DEMO_SCHOOLS,
-  scores: {
-    'sch_delhi_public': {
-      schoolId: 'sch_delhi_public',
-      round1: {
-        ...samplePushDPS,
-        isDraft: false,
-        publishedAt: '2026-09-29T10:05:00Z',
-        notes: 'Exceptional autonomous placement of 4kg and 2kg blocks'
-      },
-      round2: {
-        ...samplePullDPS,
-        isDraft: false,
-        publishedAt: '2026-09-29T11:10:00Z',
-        notes: 'High-torque triple payload tow'
-      },
-      round3Score: 120, // Match 1 In-Pit (40s * 3)
-      totalScore: samplePushDPS.finalScore + samplePullDPS.finalScore + 120 // 205 + 195 + 120 = 520
-    },
-    'sch_bombay_scottish': {
-      schoolId: 'sch_bombay_scottish',
-      round1: {
-        ...samplePushBombay,
-        isDraft: false,
-        publishedAt: '2026-09-29T10:20:00Z',
-        notes: 'Clean run, 3 blocks pushed completely inside target zone'
-      },
-      round2: {
-        ...samplePullBombay,
-        isDraft: false,
-        publishedAt: '2026-09-29T11:25:00Z'
-      },
-      round3Score: 90, // Match 2 In-Pit (30s * 3)
-      totalScore: samplePushBombay.finalScore + samplePullBombay.finalScore + 90 // 155 + 160 + 90 = 405
-    },
-    'sch_kv_iit_powai': {
-      schoolId: 'sch_kv_iit_powai',
-      round1: {
-        ...samplePushKVPowai,
-        isDraft: false,
-        publishedAt: '2026-09-29T10:35:00Z',
-        notes: '4kg block partially in zone (awarded 50% incomplete points)'
-      },
-      round2: {
-        ...samplePullKVPowai,
-        isDraft: false,
-        publishedAt: '2026-09-29T11:40:00Z'
-      },
-      round3Score: 0, // Match 2 loss
-      totalScore: samplePushKVPowai.finalScore + samplePullKVPowai.finalScore // 180 + 155 + 0 = 335
-    }
-  },
-  robotWarMatches: [
-    {
-      id: 'match_1',
-      matchNumber: 1,
-      teamAId: 'sch_delhi_public',
-      teamBId: 'sch_mothers_int',
-      result: 'team_a_win',
-      winnerId: 'sch_delhi_public',
-      pitType: 'in_pit',
-      timeLeftSeconds: 40,
-      multiplier: 3,
-      teamAPoints: 120,
-      teamBPoints: 0,
-      status: 'completed',
-      isDraft: false,
-      publishedAt: '2026-09-29T12:15:00Z',
-      matchNotes: 'DPS executed arena push into IN-PIT with 40s remaining (40s × 3 = 120 pts).'
-    },
-    {
-      id: 'match_2',
-      matchNumber: 2,
-      teamAId: 'sch_bombay_scottish',
-      teamBId: 'sch_kv_iit_powai',
-      result: 'team_a_win',
-      winnerId: 'sch_bombay_scottish',
-      pitType: 'in_pit',
-      timeLeftSeconds: 30,
-      multiplier: 3,
-      teamAPoints: 90,
-      teamBPoints: 0,
-      status: 'completed',
-      isDraft: false,
-      publishedAt: '2026-09-29T12:35:00Z',
-      matchNotes: 'Bombay Scottish pushed opponent into IN-PIT with 30s remaining (30s × 3 = 90 pts).'
-    },
-    {
-      id: 'match_3',
-      matchNumber: 3,
-      teamAId: 'sch_nps_blr',
-      teamBId: 'sch_dav_chennai',
-      result: 'pending',
-      timeLeftSeconds: 0,
-      teamAPoints: 0,
-      teamBPoints: 0,
-      status: 'scheduled',
-      isDraft: false,
-      matchNotes: 'Southern Zone Quarter-Final'
-    },
-    {
-      id: 'match_4',
-      matchNumber: 4,
-      teamAId: 'sch_modern_school',
-      teamBId: 'sch_st_xaviers_kol',
-      result: 'pending',
-      timeLeftSeconds: 0,
-      teamAPoints: 0,
-      teamBPoints: 0,
-      status: 'scheduled',
-      isDraft: false,
-      matchNotes: 'Inter-City Quarter-Final'
-    }
-  ],
-  auditLogs: [
-    {
-      id: 'log_01',
-      timestamp: '10:05 AM',
-      round: 1,
-      schoolName: 'Delhi Public School, R.K. Puram',
-      teamName: 'CyberVanguard',
-      action: 'Score published: 205 (Blocks: 180, Time Bonus: 25s)',
-      newScore: 205
-    },
-    {
-      id: 'log_02',
-      timestamp: '11:10 AM',
-      round: 2,
-      schoolName: 'Delhi Public School, R.K. Puram',
-      teamName: 'CyberVanguard',
-      action: 'Score published: 195 (Blocks: 170, Time: 30s, Penalty: 1 touch = -5)',
-      newScore: 195
-    },
-    {
-      id: 'log_03',
-      timestamp: '12:15 PM',
-      round: 3,
-      schoolName: 'Delhi Public School vs The Mother\'s International',
-      teamName: 'Match #1',
-      action: 'Robo War published: DPS win via IN-PIT (40s × 3 = 120 pts)',
-      newScore: 120
-    }
-  ],
+  schools: [],
+  scores: {},
+  robotWarMatches: [],
+  auditLogs: [],
   arenaTimer: DEFAULT_ARENA_TIMER,
   activeRun: DEFAULT_ACTIVE_RUN,
   lastPublishedResult: null,
@@ -418,6 +223,12 @@ const normalizeBlockEntries = (blocks: any[] | undefined): BlockPushScore['block
       pointsEarned
     };
   });
+
+// An official (published) Round 1 score must never be overwritten by an in-progress run. While a team
+// is being re-run, the run lives only in activeRun; the official score is replaced only when the new
+// score is explicitly published.
+const hasPublishedRound1 = (scores: CompetitionState['scores'], schoolId: string | null | undefined): boolean =>
+  !!schoolId && !!scores[schoolId]?.round1 && !scores[schoolId]!.round1!.isDraft;
 
 const CompetitionContext = createContext<CompetitionContextType | null>(null);
 
@@ -452,11 +263,49 @@ export const CompetitionProvider: React.FC<{ children: React.ReactNode }> = ({ c
   const [isFirebaseSyncing, setIsFirebaseSyncing] = useState<boolean>(false);
   const [lastCloudSync, setLastCloudSync] = useState<string | null>(null);
 
+  // The database is the single source of truth. Nothing may be written until the tournament
+  // record has been read successfully, so a slow or failed read can never push local or
+  // starter data over the real tournament.
+  const [cloudStatus, setCloudStatus] = useState<CloudStatus>('loading');
+  const [cloudError, setCloudError] = useState<string | null>(null);
+  const cloudReadyRef = useRef<boolean>(false);
+
+  // Undo safety. History snapshots are only valid while every save since them was made by this tab.
+  const historyLenRef = useRef<number>(0);
+  historyLenRef.current = historyStack.length;
+  const lastSaveRef = useRef<Promise<void>>(Promise.resolve());
+  const [undoNotice, setUndoNotice] = useState<string | null>(null);
+  const undoNoticeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const showUndoNotice = useCallback((message: string) => {
+    setUndoNotice(message);
+    if (undoNoticeTimerRef.current) clearTimeout(undoNoticeTimerRef.current);
+    undoNoticeTimerRef.current = setTimeout(() => setUndoNotice(null), 9000);
+  }, []);
+
+  const dismissUndoNotice = useCallback(() => {
+    if (undoNoticeTimerRef.current) clearTimeout(undoNoticeTimerRef.current);
+    setUndoNotice(null);
+  }, []);
+
+  // Someone else changed the data: every older history snapshot now predates their change, so
+  // restoring one would wipe it out. Drop them all and tell the operator why Undo went away.
+  const invalidateUndo = useCallback(() => {
+    if (historyLenRef.current > 0) {
+      showUndoNotice('Undo is no longer available: someone else changed the data after your last action, so it cannot be undone safely.');
+    }
+    setHistoryStack([]);
+  }, [showUndoNotice]);
+
   // Always holds the newest committed state, even between renders.
   const stateRef = useRef<CompetitionState>(state);
   stateRef.current = state;
 
   const commitState = useCallback((newState: CompetitionState, allowUndo: boolean = true) => {
+    if (!cloudReadyRef.current) {
+      console.warn('Change ignored: not connected to the database yet, so nothing was saved.');
+      return;
+    }
     // Callers build newState from the render-time `state`. When several handlers commit in the
     // same tick, the later ones would overwrite the earlier ones with stale data. Apply only the
     // top-level fields this caller actually changed on top of the latest committed state.
@@ -468,7 +317,8 @@ export const CompetitionProvider: React.FC<{ children: React.ReactNode }> = ({ c
     });
     const stateWithTimestamp: CompetitionState = {
       ...merged,
-      lastUpdated: Date.now()
+      lastUpdated: Date.now(),
+      lastWriter: SESSION_ID
     };
     stateRef.current = stateWithTimestamp;
 
@@ -490,7 +340,8 @@ export const CompetitionProvider: React.FC<{ children: React.ReactNode }> = ({ c
 
     // Synchronize to Firestore database in real-time
     setIsFirebaseSyncing(true);
-    saveCompetitionStateToFirestore(stateWithTimestamp)
+    // Remembered so Undo can wait for this save to finish before it checks the database.
+    lastSaveRef.current = saveCompetitionStateToFirestore(stateWithTimestamp)
       .then(() => {
         setIsFirebaseConnected(true);
         setIsFirebaseSyncing(false);
@@ -503,15 +354,34 @@ export const CompetitionProvider: React.FC<{ children: React.ReactNode }> = ({ c
   }, [state]);
 
   const forceCloudSync = useCallback(async () => {
+    if (!cloudReadyRef.current) return;
     setIsFirebaseSyncing(true);
     try {
-      await saveCompetitionStateToFirestore(state);
+      // Look before writing: if the database holds newer data than this screen, take it instead of
+      // overwriting it, and if the read fails write nothing at all.
+      const result = await loadCompetitionStateFromServer();
+      if (result.kind === 'error') {
+        console.warn('Sync skipped, the database could not be read:', result.message);
+        return;
+      }
+      if (result.kind === 'found' && (result.data.lastUpdated || 0) > (stateRef.current.lastUpdated || 0)) {
+        if (result.data.lastWriter !== SESSION_ID) invalidateUndo();
+        stateRef.current = result.data;
+        setState(result.data);
+        try {
+          localStorage.setItem(STORAGE_KEY, JSON.stringify(result.data));
+        } catch (err) {
+          console.warn('Local storage cache failed:', err);
+        }
+      } else {
+        await saveCompetitionStateToFirestore({ ...stateRef.current, lastWriter: SESSION_ID });
+      }
       setIsFirebaseConnected(true);
       setLastCloudSync(new Date().toLocaleTimeString());
     } finally {
       setIsFirebaseSyncing(false);
     }
-  }, [state]);
+  }, [invalidateUndo]);
 
   // Firebase Auth initialization & real-time Firestore database sync
   useEffect(() => {
@@ -529,40 +399,70 @@ export const CompetitionProvider: React.FC<{ children: React.ReactNode }> = ({ c
         console.warn('Firebase connection check:', err);
       });
 
-    // Check if cloud already has existing tournament data, or seed initial tournament state
-    fetchCompetitionStateFromFirestore()
-      .then((cloudData) => {
-        if (cloudData && cloudData.eventName && Array.isArray(cloudData.schools)) {
-          if (!cloudData.lastUpdated || cloudData.lastUpdated > (state.lastUpdated || 0)) {
-            setState(cloudData);
-            setIsFirebaseConnected(true);
-            setLastCloudSync(new Date().toLocaleTimeString());
-          }
-        } else {
-          // Cloud empty: seed with default tournament structure so remote screens populate immediately
-          saveCompetitionStateToFirestore(state).catch(e => console.warn('Initial cloud seed:', e));
-        }
-      })
-      .catch((err) => console.warn('Cloud fetch on start:', err));
+    let cancelled = false;
+    let retryTimer: ReturnType<typeof setTimeout> | null = null;
+
+    // Adopt the database's tournament record as the working state and allow edits from now on.
+    // `null` means the server confirmed there is no record yet: start empty; the first real edit
+    // creates it. Local or starter data is never written to the cloud on its own.
+    const adoptCloud = (data: CompetitionState | null) => {
+      const next: CompetitionState = data ?? { ...defaultInitialState };
+      stateRef.current = next;
+      cloudReadyRef.current = true;
+      setState(next);
+      setCloudError(null);
+      setCloudStatus('ready');
+      setIsFirebaseConnected(true);
+      setLastCloudSync(new Date().toLocaleTimeString());
+      try {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
+      } catch (err) {
+        console.warn('Local storage cache failed:', err);
+      }
+    };
+
+    const loadFromCloud = async () => {
+      if (cancelled || cloudReadyRef.current) return;
+      const result = await loadCompetitionStateFromServer();
+      if (cancelled || cloudReadyRef.current) return;
+      if (result.kind === 'found') {
+        adoptCloud(result.data);
+      } else if (result.kind === 'missing') {
+        adoptCloud(null);
+      } else {
+        // Could not read the database: stay read-only and keep retrying. Never write.
+        console.warn('Cannot read the tournament record yet:', result.message);
+        setCloudError(result.message);
+        setCloudStatus('error');
+        retryTimer = setTimeout(loadFromCloud, 4000);
+      }
+    };
+    loadFromCloud();
 
     // Listen to real-time updates from Firebase Firestore across all operators and screens
     unsubscribe = subscribeToCompetitionState(
       (cloudState) => {
-        setState((currentLocal) => {
-          if (cloudState.lastUpdated && currentLocal.lastUpdated && cloudState.lastUpdated <= currentLocal.lastUpdated) {
-            return currentLocal;
+        if (!cloudReadyRef.current) {
+          adoptCloud(cloudState);
+          return;
+        }
+        const current = stateRef.current;
+        if (cloudState.lastUpdated && current.lastUpdated && cloudState.lastUpdated <= current.lastUpdated) {
+          return;
+        }
+        // A save made by anyone other than this tab invalidates this tab's Undo history.
+        if (cloudState.lastWriter !== SESSION_ID) invalidateUndo();
+        stateRef.current = cloudState;
+        setState(cloudState);
+        setIsFirebaseConnected(true);
+        setLastCloudSync(new Date().toLocaleTimeString());
+        if (typeof window !== 'undefined') {
+          try {
+            localStorage.setItem(STORAGE_KEY, JSON.stringify(cloudState));
+          } catch (err) {
+            console.warn('Local storage cache failed:', err);
           }
-          setIsFirebaseConnected(true);
-          setLastCloudSync(new Date().toLocaleTimeString());
-          if (typeof window !== 'undefined') {
-            try {
-              localStorage.setItem(STORAGE_KEY, JSON.stringify(cloudState));
-            } catch (err) {
-              console.warn('Local storage cache failed:', err);
-            }
-          }
-          return cloudState;
-        });
+        }
       },
       (error) => {
         console.warn('Firestore subscription status:', error.message);
@@ -570,6 +470,8 @@ export const CompetitionProvider: React.FC<{ children: React.ReactNode }> = ({ c
     );
 
     return () => {
+      cancelled = true;
+      if (retryTimer) clearTimeout(retryTimer);
       if (unsubscribe) unsubscribe();
     };
   }, []);
@@ -578,18 +480,29 @@ export const CompetitionProvider: React.FC<{ children: React.ReactNode }> = ({ c
   useEffect(() => {
     if (typeof window === 'undefined') return;
 
+    // A copy from another tab is only adopted once this tab has read the database itself, and only
+    // when it is strictly newer than what this tab already has. An older or unverified copy must
+    // never replace the current state, because the next edit would then save it to the cloud.
+    const adoptIfNewer = (incoming: CompetitionState | null | undefined) => {
+      if (!cloudReadyRef.current || !incoming || !incoming.lastUpdated) return;
+      if (incoming.lastUpdated <= (stateRef.current.lastUpdated || 0)) return;
+      // Another tab's save is somebody else's change as far as this tab's Undo is concerned.
+      if (incoming.lastWriter !== SESSION_ID) invalidateUndo();
+      stateRef.current = incoming;
+      setState(incoming);
+    };
+
     const channel = new BroadcastChannel(SYNC_CHANNEL_NAME);
     channel.onmessage = (event) => {
       if (event.data?.type === 'BRL_STATE_UPDATE' && event.data.state) {
-        setState(event.data.state);
+        adoptIfNewer(event.data.state);
       }
     };
 
     const handleStorage = (e: StorageEvent) => {
       if (e.key === STORAGE_KEY && e.newValue) {
         try {
-          const parsed = JSON.parse(e.newValue);
-          setState(parsed);
+          adoptIfNewer(JSON.parse(e.newValue));
         } catch (err) {
           console.error('Storage sync parse failed', err);
         }
@@ -931,6 +844,7 @@ export const CompetitionProvider: React.FC<{ children: React.ReactNode }> = ({ c
 
   // Round 1 (Block Push) - Draft vs Publish
   const saveBlockPushDraft = useCallback((schoolId: string, scoreData: BlockPushScore) => {
+    if (hasPublishedRound1(state.scores, schoolId)) return;
     const teamScore = state.scores[schoolId] || {
       schoolId,
       round1: null,
@@ -1437,13 +1351,6 @@ export const CompetitionProvider: React.FC<{ children: React.ReactNode }> = ({ c
     });
   }, [state, commitState]);
 
-  const loadDemoSchools = useCallback(() => {
-    commitState({
-      ...defaultInitialState,
-      lastUpdated: Date.now()
-    });
-  }, [commitState]);
-
   const clearAllSchools = useCallback(() => {
     commitState({
       ...state,
@@ -1619,12 +1526,29 @@ export const CompetitionProvider: React.FC<{ children: React.ReactNode }> = ({ c
     });
   }, [commitState]);
 
-  const undoLastAction = useCallback(() => {
-    if (historyStack.length === 0) return;
+  // Undo puts back an older copy of the whole tournament. That is only safe while every save since
+  // then was made by this tab; otherwise it would silently erase another operator's newer work.
+  // So the database is checked first, and the undo is refused if anyone else has saved since.
+  const undoLastAction = useCallback(async () => {
+    if (historyStack.length === 0 || !cloudReadyRef.current) return;
+
+    // Let this tab's own pending save land first, so it is not mistaken for someone else's.
+    await lastSaveRef.current;
+    const result = await loadCompetitionStateFromServer();
+    if (result.kind !== 'found') {
+      showUndoNotice('Undo is unavailable right now: the database could not be checked. Nothing was changed.');
+      return;
+    }
+    if (result.data.lastWriter !== SESSION_ID) {
+      invalidateUndo();
+      showUndoNotice('Undo blocked: someone else changed the data after your last action, so it cannot be undone safely. Nothing was changed.');
+      return;
+    }
+
     const previous = historyStack[historyStack.length - 1];
     setHistoryStack(prev => prev.slice(0, -1));
     commitState(previous, false);
-  }, [historyStack, commitState]);
+  }, [historyStack, commitState, invalidateUndo, showUndoNotice]);
 
   // Arena Timer Synchronization Callbacks
   const startArenaTimer = useCallback((round: 1 | 2 | 3 = state.currentRound, schoolId?: string, duration: number = 120) => {
@@ -1777,7 +1701,7 @@ export const CompetitionProvider: React.FC<{ children: React.ReactNode }> = ({ c
     };
 
     let updatedScores = { ...state.scores };
-    if (currentRun.schoolId) {
+    if (currentRun.schoolId && !hasPublishedRound1(state.scores, currentRun.schoolId)) {
       const existing = updatedScores[currentRun.schoolId] || {
         schoolId: currentRun.schoolId,
         round1: null,
@@ -1872,7 +1796,7 @@ export const CompetitionProvider: React.FC<{ children: React.ReactNode }> = ({ c
     };
 
     let updatedScores = { ...state.scores };
-    if (currentRun.schoolId) {
+    if (currentRun.schoolId && !hasPublishedRound1(state.scores, currentRun.schoolId)) {
       const existing = updatedScores[currentRun.schoolId] || {
         schoolId: currentRun.schoolId,
         round1: null,
@@ -2005,6 +1929,8 @@ export const CompetitionProvider: React.FC<{ children: React.ReactNode }> = ({ c
         state,
         leaderboard,
         hasActiveTie,
+        cloudStatus,
+        cloudError,
         tiedRanks,
         currentSchool,
         upNextSchool,
@@ -2031,7 +1957,6 @@ export const CompetitionProvider: React.FC<{ children: React.ReactNode }> = ({ c
         addSchool,
         editSchool,
         deleteSchool,
-        loadDemoSchools,
         clearAllSchools,
         setGrandWinner,
         triggerWinnerMode,
@@ -2041,6 +1966,8 @@ export const CompetitionProvider: React.FC<{ children: React.ReactNode }> = ({ c
         resetAllScores,
         importState,
         undoLastAction,
+        undoNotice,
+        dismissUndoNotice,
         canUndo: historyStack.length > 0,
         isDisplayMode,
         setIsDisplayMode,

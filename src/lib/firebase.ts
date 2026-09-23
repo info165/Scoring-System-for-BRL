@@ -147,18 +147,27 @@ export async function saveCompetitionStateToFirestore(state: CompetitionState): 
 }
 
 /**
- * Fetch latest competition state from Firestore once
+ * Result of reading the tournament record straight from the server.
+ * The three outcomes must never be confused: a FAILED read is not the same as an EMPTY database,
+ * and only a confirmed read may be trusted as the starting point for edits.
  */
-export async function fetchCompetitionStateFromFirestore(): Promise<CompetitionState | null> {
+export type CloudLoadResult =
+  | { kind: 'found'; data: CompetitionState }
+  | { kind: 'missing' }
+  | { kind: 'error'; message: string };
+
+export async function loadCompetitionStateFromServer(): Promise<CloudLoadResult> {
   try {
-    const snap = await getDoc(competitionDocRef);
-    if (snap.exists()) {
-      return snap.data() as CompetitionState;
+    const snap = await getDocFromServer(competitionDocRef);
+    if (!snap.exists()) return { kind: 'missing' };
+    const data = snap.data() as CompetitionState;
+    if (data && data.eventName && Array.isArray(data.schools)) {
+      return { kind: 'found', data };
     }
+    return { kind: 'error', message: 'The stored tournament record is not in the expected format' };
   } catch (err) {
-    console.warn('Error fetching Firestore state:', err);
+    return { kind: 'error', message: err instanceof Error ? err.message : String(err) };
   }
-  return null;
 }
 
 /**

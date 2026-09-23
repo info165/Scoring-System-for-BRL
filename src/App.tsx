@@ -18,7 +18,7 @@ import { WinnerScreen } from './components/display/WinnerScreen';
 import { ShieldAlert } from 'lucide-react';
 
 function MainCompetitionApp() {
-  const { state, setDisplayState } = useCompetition();
+  const { state, setDisplayState, cloudStatus, cloudError, undoNotice, dismissUndoNotice } = useCompetition();
   const { isAuthenticated, userRole, isLoading, currentUser } = useAuth();
 
   // Determine initial view from URL query param or hash (e.g. ?mode=display or #display)
@@ -81,6 +81,27 @@ function MainCompetitionApp() {
 
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col antialiased">
+      {/* Editing is disabled until the tournament record has been read from the database */}
+      {cloudStatus !== 'ready' && (
+        <div className={`px-4 py-2 text-center text-xs font-bold border-b ${
+          cloudStatus === 'error'
+            ? 'bg-rose-950 text-rose-200 border-rose-800'
+            : 'bg-amber-950 text-amber-200 border-amber-800'
+        }`}>
+          {cloudStatus === 'error'
+            ? `Cannot reach the database, so nothing can be saved right now. Retrying automatically… ${cloudError ? `(${cloudError})` : ''}`
+            : 'Connecting to the database… editing is disabled until the connection is ready.'}
+        </div>
+      )}
+
+      {/* Explains why Undo was refused or removed (someone else changed the data) */}
+      {undoNotice && (
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-[60] max-w-xl w-[92%] flex items-start gap-3 px-4 py-3 rounded-xl border border-amber-500/60 bg-slate-900 text-amber-200 text-xs font-semibold shadow-2xl" role="status">
+          <span className="flex-1">{undoNotice}</span>
+          <button onClick={dismissUndoNotice} className="text-amber-400 hover:text-white font-bold" aria-label="Dismiss">OK</button>
+        </div>
+      )}
+
       {/* Central Header Navigation */}
       <Header
         activeTab={activeTab}
