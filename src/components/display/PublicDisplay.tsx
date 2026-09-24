@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Maximize2, Minimize2, Settings, ArrowLeft } from 'lucide-react';
 import { useCompetition } from '../../context/CompetitionContext';
 import { WelcomeScreen } from './WelcomeScreen';
@@ -15,18 +15,39 @@ interface PublicDisplayProps {
 
 export const PublicDisplay: React.FC<PublicDisplayProps> = ({ onSwitchToOperator }) => {
   const { state, setDisplayState, setLeaderboardFilter } = useCompetition();
-  const [isFullscreen, setIsFullscreen] = useState(false);
+  // True for both the on-screen full-screen button and the browser's F11 mode. While it is true the
+  // whole control bar is removed, so the audience never sees operator controls.
+  const detectFullscreen = () =>
+    typeof window !== 'undefined' && (
+      !!document.fullscreenElement ||
+      window.matchMedia('(display-mode: fullscreen)').matches ||
+      // F11 mode: the page fills the screen. The outer size is checked too because the inner size
+      // shrinks when the browser is zoomed.
+      (window.innerWidth >= window.screen.width && window.innerHeight >= window.screen.height) ||
+      (window.outerWidth >= window.screen.width - 1 && window.outerHeight >= window.screen.height - 1)
+    );
+  const [isFullscreen, setIsFullscreen] = useState<boolean>(detectFullscreen);
+
+  useEffect(() => {
+    const update = () => setIsFullscreen(detectFullscreen());
+    const media = window.matchMedia('(display-mode: fullscreen)');
+    document.addEventListener('fullscreenchange', update);
+    window.addEventListener('resize', update);
+    media.addEventListener('change', update);
+    update();
+    return () => {
+      document.removeEventListener('fullscreenchange', update);
+      window.removeEventListener('resize', update);
+      media.removeEventListener('change', update);
+    };
+  }, []);
   const [showControls, setShowControls] = useState(false);
 
   const toggleFullscreen = () => {
     if (!document.fullscreenElement) {
       document.documentElement.requestFullscreen().catch(() => {});
-      setIsFullscreen(true);
-    } else {
-      if (document.exitFullscreen) {
-        document.exitFullscreen().catch(() => {});
-        setIsFullscreen(false);
-      }
+    } else if (document.exitFullscreen) {
+      document.exitFullscreen().catch(() => {});
     }
   };
 
@@ -42,6 +63,7 @@ export const PublicDisplay: React.FC<PublicDisplayProps> = ({ onSwitchToOperator
       {state.displayState === 'winner' && <WinnerScreen />}
 
       {/* Floating Hover Controls (Discreet for Stage Techs) */}
+      {!isFullscreen && (
       <div 
         className="fixed bottom-4 right-4 z-50 transition-opacity duration-300"
         onMouseEnter={() => setShowControls(true)}
@@ -100,6 +122,7 @@ export const PublicDisplay: React.FC<PublicDisplayProps> = ({ onSwitchToOperator
           </button>
         </div>
       </div>
+      )}
     </div>
   );
 };
