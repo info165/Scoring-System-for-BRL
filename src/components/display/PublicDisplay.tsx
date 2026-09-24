@@ -93,7 +93,7 @@ export const PublicDisplay: React.FC<PublicDisplayProps> = ({ onSwitchToOperator
             <option value="current_round">2. Round Overview</option>
             <option value="live_run">3. Now Playing</option>
             <option value="leaderboard">4. Leaderboard</option>
-            <option value="robot_war">5. Robot War</option>
+            <option value="robot_war">5. Robo War</option>
             <option value="winner">6. Winner Podium</option>
           </select>
 

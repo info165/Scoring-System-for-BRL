@@ -3,8 +3,8 @@ import { Trophy } from 'lucide-react';
 import { useCompetition } from '../../context/CompetitionContext';
 
 const ROUND_META: Record<1 | 2 | 3, { label: string; short: string; badgeClass: string }> = {
-  1: { label: 'ROUND 1: BLOCK PUSH', short: 'R1', badgeClass: 'bg-blue-500/20 text-blue-300 border-blue-500/40' },
-  2: { label: 'ROUND 2: BLOCK PULL', short: 'R2', badgeClass: 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40' },
+  1: { label: 'ROUND 1: ROBO PUSH', short: 'R1', badgeClass: 'bg-blue-500/20 text-blue-300 border-blue-500/40' },
+  2: { label: 'ROUND 2: ROBO PULL', short: 'R2', badgeClass: 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40' },
   3: { label: 'ROUND 3: ROBO WAR', short: 'R3', badgeClass: 'bg-red-500/20 text-red-300 border-red-500/40' },
 };
 
@@ -84,8 +84,8 @@ export const LeaderboardScreen: React.FC = () => {
                   <th className="py-4 px-6">CITY</th>
                   {filter === 'all' ? (
                     <>
-                      <th className="py-4 px-6 text-center text-blue-400">R1: BLOCK PUSH</th>
-                      <th className="py-4 px-6 text-center text-emerald-400">R2: BLOCK PULL</th>
+                      <th className="py-4 px-6 text-center text-blue-400">R1: ROBO PUSH</th>
+                      <th className="py-4 px-6 text-center text-emerald-400">R2: ROBO PULL</th>
                       <th className="py-4 px-6 text-center text-red-400">R3: ROBO WAR</th>
                       <th className="py-4 px-6 text-right font-bold text-amber-400">TOTAL SCORE</th>
                     </>

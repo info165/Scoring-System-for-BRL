@@ -20,6 +20,7 @@ import {
 import { useCompetition } from '../../context/CompetitionContext';
 import { testConnection, firebaseConfig } from '../../lib/firebase';
 import { CompetitionStatus } from '../../types';
+import { downloadTournamentBackup } from '../../utils/backup';
 
 export const SettingsView: React.FC = () => {
   const { 
@@ -370,8 +371,16 @@ export const SettingsView: React.FC = () => {
               <h4 className="text-base font-bold text-white">Reset All Match Scores?</h4>
             </div>
             <p className="text-xs text-slate-300">
-              This will erase all recorded scores for Round 1, Round 2, and Robot War. School registrations will remain intact.
+              This will erase all recorded scores for Round 1, Round 2, and Robo War. School registrations will remain intact.
             </p>
+              <button
+                type="button"
+                onClick={() => downloadTournamentBackup(state, 'Before_Reset_Scores')}
+                className="w-full py-2 bg-cyan-950/60 hover:bg-cyan-900 text-cyan-300 border border-cyan-800/60 text-xs font-bold rounded-lg flex items-center justify-center gap-2"
+              >
+                <Download className="w-3.5 h-3.5" />
+                <span>Download a backup first (recommended)</span>
+              </button>
             <div className="flex items-center justify-end space-x-2 pt-2">
               <button
                 onClick={() => setConfirmResetScores(false)}
@@ -403,6 +412,14 @@ export const SettingsView: React.FC = () => {
             <p className="text-xs text-slate-300">
               This will completely wipe all registered schools, teams, matches, scores, and logs from memory.
             </p>
+              <button
+                type="button"
+                onClick={() => downloadTournamentBackup(state, 'Before_Factory_Wipe')}
+                className="w-full py-2 bg-cyan-950/60 hover:bg-cyan-900 text-cyan-300 border border-cyan-800/60 text-xs font-bold rounded-lg flex items-center justify-center gap-2"
+              >
+                <Download className="w-3.5 h-3.5" />
+                <span>Download a backup first (recommended)</span>
+              </button>
             <div className="flex items-center justify-end space-x-2 pt-2">
               <button
                 onClick={() => setConfirmResetAll(false)}

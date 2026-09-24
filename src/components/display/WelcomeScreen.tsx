@@ -73,7 +73,7 @@ export const WelcomeScreen: React.FC = () => {
               ROUND 01
             </div>
             <h3 className="text-xl font-display font-bold text-white mb-2">
-              Block Push Challenge
+              Robo Push Challenge
             </h3>
             <p className="text-xs text-slate-400 leading-relaxed">
               Targeted mass displacement into high-value concentric zones with autonomous precision bonuses.
@@ -86,7 +86,7 @@ export const WelcomeScreen: React.FC = () => {
               ROUND 02
             </div>
             <h3 className="text-xl font-display font-bold text-white mb-2">
-              Block Pull Challenge
+              Robo Pull Challenge
             </h3>
             <p className="text-xs text-slate-400 leading-relaxed">
               High-torque friction towing across lane tracks up to 4.0 kg maximum resistance payload tiers.
@@ -99,7 +99,7 @@ export const WelcomeScreen: React.FC = () => {
               ROUND 03
             </div>
             <h3 className="text-xl font-display font-bold text-white mb-2">
-              Combat Robot War
+              Combat Robo War
             </h3>
             <p className="text-xs text-slate-400 leading-relaxed">
               Head-to-head tactical arena combat. Points awarded for knockouts, ring-outs, and judges decisions.

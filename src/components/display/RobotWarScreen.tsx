@@ -51,7 +51,7 @@ export const RobotWarScreen: React.FC = () => {
               <span className="text-transparent bg-clip-text bg-gradient-to-b from-orange-300 to-orange-600">BHARAT</span>{' '}
               <span className="text-transparent bg-clip-text bg-gradient-to-b from-white to-slate-300">ROBOTICS</span>{' '}
               <span className="text-transparent bg-clip-text bg-gradient-to-b from-emerald-300 to-green-600">LEAGUE</span>{' '}
-              <span className="text-white">2026 ROBOT WAR</span>
+              <span className="text-white">2026 ROBO WAR</span>
             </h1>
           </div>
         </div>
@@ -106,6 +106,9 @@ export const RobotWarScreen: React.FC = () => {
                     <span className="px-3 py-1 rounded-full bg-cyan-500/20 text-cyan-300 border border-cyan-500/30 text-xs font-mono font-bold uppercase">
                       BLUE CORNER • {teamASchool.teamNumber}
                     </span>
+                    {activeRobotWarMatch.challengerId === teamASchool.id && (
+                      <span className="px-3 py-1 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/50 text-xs font-mono font-bold uppercase">CHALLENGER</span>
+                    )}
                     {isTeamAWinner && (
                       <span className="px-3 py-1 rounded-full bg-amber-500 text-slate-950 text-xs font-display font-black tracking-wider uppercase">
                         WINNER
@@ -128,7 +131,7 @@ export const RobotWarScreen: React.FC = () => {
                 </div>
 
                 <div className="mt-8 pt-4 border-t border-slate-800 flex items-center justify-between">
-                  <span className="text-xs font-mono text-slate-400">WAR POINTS AWARDED:</span>
+                  <span className="text-xs font-mono text-slate-400">{activeRobotWarMatch.challengerId === teamASchool.id ? 'CHALLENGER • NO POINTS' : 'WAR POINTS AWARDED:'}</span>
                   <span className="font-display font-black text-4xl text-cyan-300 font-mono">
                     {activeRobotWarMatch.teamAPoints} <span className="text-sm font-normal text-slate-400">PTS</span>
                   </span>
@@ -167,6 +170,9 @@ export const RobotWarScreen: React.FC = () => {
                     <span className="px-3 py-1 rounded-full bg-rose-500/20 text-rose-300 border border-rose-500/30 text-xs font-mono font-bold uppercase">
                       RED CORNER • {teamBSchool.teamNumber}
                     </span>
+                    {activeRobotWarMatch.challengerId === teamBSchool.id && (
+                      <span className="px-3 py-1 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/50 text-xs font-mono font-bold uppercase">CHALLENGER</span>
+                    )}
                     {isTeamBWinner && (
                       <span className="px-3 py-1 rounded-full bg-amber-500 text-slate-950 text-xs font-display font-black tracking-wider uppercase">
                         WINNER
@@ -189,7 +195,7 @@ export const RobotWarScreen: React.FC = () => {
                 </div>
 
                 <div className="mt-8 pt-4 border-t border-slate-800 flex items-center justify-between">
-                  <span className="text-xs font-mono text-slate-400">WAR POINTS AWARDED:</span>
+                  <span className="text-xs font-mono text-slate-400">{activeRobotWarMatch.challengerId === teamBSchool.id ? 'CHALLENGER • NO POINTS' : 'WAR POINTS AWARDED:'}</span>
                   <span className="font-display font-black text-4xl text-rose-300 font-mono">
                     {activeRobotWarMatch.teamBPoints} <span className="text-sm font-normal text-slate-400">PTS</span>
                   </span>
@@ -219,7 +225,7 @@ export const RobotWarScreen: React.FC = () => {
 
       {/* Footer */}
       <footer className="relative z-10 border-t border-slate-800/80 pt-4 flex items-center justify-between text-xs font-mono text-slate-400">
-        <div>BHARAT ROBOTICS LEAGUE 2026 • COMBAT ROBOT WAR ARENA</div>
+        <div>BHARAT ROBOTICS LEAGUE 2026 • COMBAT ROBO WAR ARENA</div>
         <div>OFFICIAL KNOCKOUT & DECISION SCORING</div>
       </footer>
     </div>

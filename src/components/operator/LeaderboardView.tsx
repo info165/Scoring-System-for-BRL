@@ -36,8 +36,8 @@ export const LeaderboardView: React.FC = () => {
       'Team Number',
       'Team Name',
       'City',
-      'Round 1 Score (Push)',
-      'Round 2 Score (Pull)',
+      'Round 1 Score (Robo Push)',
+      'Round 2 Score (Robo Pull)',
       'Round 3 Score (War)',
       'Total Score'
     ];
@@ -224,8 +224,8 @@ export const LeaderboardView: React.FC = () => {
                 <th className="py-3.5 px-4 text-center w-16">Rank</th>
                 <th className="py-3.5 px-4">Team / School</th>
                 <th className="py-3.5 px-4">City</th>
-                <th className="py-3.5 px-4 text-center text-blue-400">R1: Block Push</th>
-                <th className="py-3.5 px-4 text-center text-emerald-400">R2: Block Pull</th>
+                <th className="py-3.5 px-4 text-center text-blue-400">R1: Robo Push</th>
+                <th className="py-3.5 px-4 text-center text-emerald-400">R2: Robo Pull</th>
                 <th className="py-3.5 px-4 text-center text-red-400">R3: Robo War</th>
                 <th className="py-3.5 px-4 text-right font-bold text-amber-400">Total Points</th>
                 <th className="py-3.5 px-4 text-center">Rounds Scored</th>

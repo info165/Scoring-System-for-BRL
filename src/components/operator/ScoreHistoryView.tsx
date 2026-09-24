@@ -117,11 +117,17 @@ export const ScoreHistoryView: React.FC = () => {
             </div>
           ) : (
             filteredLogs.map((log) => {
-              const formattedTime = new Date(log.timestamp).toLocaleTimeString([], {
-                hour: '2-digit',
-                minute: '2-digit',
-                second: '2-digit'
-              });
+              // Entries store only a clock time such as "02:12 PM" (not a full date), and their id carries
+              // the exact moment they were written. Use that for date and seconds; fall back to the
+              // stored text so a bad value can never show as "Invalid Date".
+              const idMs = Number((String(log.id).match(/log_(\d{13})/) || [])[1]);
+              const fromId = Number.isFinite(idMs) && idMs > 0 ? new Date(idMs) : null;
+              const parsed = new Date(log.timestamp);
+              const formattedTime = fromId
+                ? fromId.toLocaleString([], { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit', second: '2-digit' })
+                : !isNaN(parsed.getTime())
+                  ? parsed.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })
+                  : String(log.timestamp || '');
 
               return (
                 <div key={log.id} className="p-4 hover:bg-slate-800/40 transition flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">

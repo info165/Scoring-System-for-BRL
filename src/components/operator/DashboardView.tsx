@@ -30,13 +30,41 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ setActiveTab }) =>
     setDisplayState,
     setLeaderboardFilter,
     setCurrentRound,
-    triggerWinnerMode
+    triggerWinnerMode,
+    setActiveRobotWarMatch,
+    activeRobotWarMatch
   } = useCompetition();
 
   const totalSchools = state.schools.filter(s => s.isActive).length;
   const currentRoundKey = state.currentRound === 3 ? 1 : state.currentRound;
   const currentQueue = state.runQueue[currentRoundKey] || { completedSchoolIds: [], queueSchoolIds: [] };
-  const completedCount = currentQueue.completedSchoolIds.length;
+  const isRound3 = state.currentRound === 3;
+
+  // Round 3 has no run queue: progress is how many teams have finished a Robo War match, and the
+  // run order is the list of matches still to be fought.
+  const activeSchoolIds = new Set(state.schools.filter(s => s.isActive).map(s => s.id));
+  const finishedMatches = state.robotWarMatches.filter(m => m.status === 'completed' && !m.isDraft);
+  const round3DoneTeams = new Set<string>();
+  finishedMatches.forEach(m => {
+    if (activeSchoolIds.has(m.teamAId)) round3DoneTeams.add(m.teamAId);
+    if (activeSchoolIds.has(m.teamBId)) round3DoneTeams.add(m.teamBId);
+  });
+  const pendingMatches = state.robotWarMatches.filter(m => m.status !== 'completed' || m.isDraft);
+  const nowMatch = activeRobotWarMatch && pendingMatches.some(m => m.id === activeRobotWarMatch.id)
+    ? activeRobotWarMatch
+    : pendingMatches[0] || null;
+  const nowIndex = nowMatch ? pendingMatches.findIndex(m => m.id === nowMatch.id) : -1;
+  const upNextMatch = nowIndex >= 0 ? pendingMatches[nowIndex + 1] || null : null;
+  const followingMatch = nowIndex >= 0 ? pendingMatches[nowIndex + 2] || null : null;
+  const schoolName = (id: string) => {
+    const t = state.schools.find(x => x.id === id);
+    return t ? `${t.name} (${t.teamName})` : 'Unknown team';
+  };
+  const matchTitle = (m: { teamAId: string; teamBId: string }) => `${schoolName(m.teamAId)} vs ${schoolName(m.teamBId)}`;
+  const matchSubtitle = (m: { matchNumber: number; challengerId?: string | null }) =>
+    `Match #${m.matchNumber}${m.challengerId ? ' • Challenger match' : ''}`;
+
+  const completedCount = isRound3 ? round3DoneTeams.size : currentQueue.completedSchoolIds.length;
   const remainingCount = Math.max(0, totalSchools - completedCount);
   const progressPercent = totalSchools > 0 ? Math.round((completedCount / totalSchools) * 100) : 0;
 
@@ -121,7 +149,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ setActiveTab }) =>
             <div className="text-2xl sm:text-3xl font-display font-bold text-amber-400">
               {remainingCount}
             </div>
-            <span className="text-[11px] text-slate-400">Teams in queue</span>
+            <span className="text-[11px] text-slate-400">{isRound3 ? 'Teams yet to fight' : 'Teams in queue'}</span>
           </div>
         </div>
 
@@ -133,9 +161,9 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ setActiveTab }) =>
           </div>
           <div className="mt-3">
             <div className="text-lg sm:text-xl font-display font-bold text-purple-300 truncate">
-              {state.currentRound === 1 && 'Round 1: Push'}
-              {state.currentRound === 2 && 'Round 2: Pull'}
-              {state.currentRound === 3 && 'Round 3: War'}
+              {state.currentRound === 1 && 'Round 1: Robo Push'}
+              {state.currentRound === 2 && 'Round 2: Robo Pull'}
+              {state.currentRound === 3 && 'Round 3: Robo War'}
             </div>
             <span className="text-[11px] text-slate-400">Active scoring stage</span>
           </div>
@@ -166,7 +194,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ setActiveTab }) =>
       <div className="bg-slate-900/70 border border-slate-800 rounded-xl p-4">
         <div className="flex items-center justify-between text-xs font-medium text-slate-300 mb-2">
           <span>Round {state.currentRound} Execution Progress</span>
-          <span>{completedCount} of {totalSchools} Teams Completed ({progressPercent}%)</span>
+          <span>{completedCount} of {totalSchools} Teams Completed ({progressPercent}%){isRound3 ? ' • ' + finishedMatches.length + ' matches finished' : ''}</span>
         </div>
         <div className="w-full bg-slate-800 rounded-full h-3 overflow-hidden">
           <div 
@@ -201,15 +229,15 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ setActiveTab }) =>
                 <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
                 <span>Now Playing</span>
               </div>
-              <div className="text-xs text-slate-400 font-medium mt-1">CURRENT TEAM</div>
-              <div className="text-base font-bold text-white mt-1 leading-snug truncate">
-                {currentSchool ? currentSchool.name : 'None Selected'}
+              <div className="text-xs text-slate-400 font-medium mt-1">{isRound3 ? 'CURRENT MATCH' : 'CURRENT TEAM'}</div>
+              <div className="text-base font-bold text-white mt-1 leading-snug break-words">
+                {isRound3 ? (nowMatch ? matchTitle(nowMatch) : 'None Scheduled') : currentSchool ? currentSchool.name : 'None Selected'}
               </div>
               <div className="text-xs text-cyan-300 font-medium truncate mt-0.5">
-                {currentSchool ? `${currentSchool.teamName} • ${currentSchool.teamNumber}` : '—'}
+                {isRound3 ? (nowMatch ? matchSubtitle(nowMatch) : '—') : currentSchool ? `${currentSchool.teamName} • ${currentSchool.teamNumber}` : '—'}
               </div>
               <div className="text-[11px] text-slate-400 mt-2 truncate">
-                {currentSchool ? currentSchool.city : ''}
+                {isRound3 ? '' : currentSchool ? currentSchool.city : ''}
               </div>
 
               <div className="mt-4 pt-3 border-t border-slate-800 flex items-center justify-between">
@@ -217,18 +245,23 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ setActiveTab }) =>
                   onClick={() => {
                     if (state.currentRound === 1) setActiveTab('round_1');
                     else if (state.currentRound === 2) setActiveTab('round_2');
-                    else setActiveTab('round_3');
+                    else {
+                      if (nowMatch) setActiveRobotWarMatch(nowMatch.id);
+                      setActiveTab('round_3');
+                    }
                   }}
                   className="text-xs font-bold text-amber-400 hover:text-amber-300 flex items-center gap-1"
                 >
                   Score Run <ArrowRight className="w-3 h-3" />
                 </button>
-                <button
-                  onClick={advanceQueue}
-                  className="px-2.5 py-1 bg-emerald-600 hover:bg-emerald-500 text-white rounded text-xs font-bold transition shadow-sm"
-                >
-                  Next Team
-                </button>
+                {!isRound3 && (
+                  <button
+                    onClick={advanceQueue}
+                    className="px-2.5 py-1 bg-emerald-600 hover:bg-emerald-500 text-white rounded text-xs font-bold transition shadow-sm"
+                  >
+                    Next Team
+                  </button>
+                )}
               </div>
             </div>
 
@@ -236,14 +269,14 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ setActiveTab }) =>
             <div className="bg-slate-900/90 border border-slate-700/80 rounded-xl p-4 flex flex-col justify-between">
               <div>
                 <div className="text-[10px] font-bold text-cyan-400 uppercase tracking-wider">UP NEXT</div>
-                <div className="text-base font-bold text-slate-200 mt-1 leading-snug truncate">
-                  {upNextSchool ? upNextSchool.name : 'End of Queue'}
+                <div className="text-base font-bold text-slate-200 mt-1 leading-snug break-words">
+                  {isRound3 ? (upNextMatch ? matchTitle(upNextMatch) : 'No more matches') : upNextSchool ? upNextSchool.name : 'End of Queue'}
                 </div>
                 <div className="text-xs text-slate-400 font-medium truncate mt-0.5">
-                  {upNextSchool ? `${upNextSchool.teamName} • ${upNextSchool.teamNumber}` : '—'}
+                  {isRound3 ? (upNextMatch ? matchSubtitle(upNextMatch) : '—') : upNextSchool ? `${upNextSchool.teamName} • ${upNextSchool.teamNumber}` : '—'}
                 </div>
                 <div className="text-[11px] text-slate-500 mt-2 truncate">
-                  {upNextSchool ? upNextSchool.city : ''}
+                  {isRound3 ? '' : upNextSchool ? upNextSchool.city : ''}
                 </div>
               </div>
               <div className="text-[11px] text-slate-400 pt-3 border-t border-slate-800/80 mt-3">
@@ -255,14 +288,14 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ setActiveTab }) =>
             <div className="bg-slate-900/60 border border-slate-800 rounded-xl p-4 flex flex-col justify-between">
               <div>
                 <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">FOLLOWING</div>
-                <div className="text-base font-bold text-slate-300 mt-1 leading-snug truncate">
-                  {followingSchool ? followingSchool.name : 'None'}
+                <div className="text-base font-bold text-slate-300 mt-1 leading-snug break-words">
+                  {isRound3 ? (followingMatch ? matchTitle(followingMatch) : 'None') : followingSchool ? followingSchool.name : 'None'}
                 </div>
                 <div className="text-xs text-slate-500 font-medium truncate mt-0.5">
-                  {followingSchool ? `${followingSchool.teamName} • ${followingSchool.teamNumber}` : '—'}
+                  {isRound3 ? (followingMatch ? matchSubtitle(followingMatch) : '—') : followingSchool ? `${followingSchool.teamName} • ${followingSchool.teamNumber}` : '—'}
                 </div>
                 <div className="text-[11px] text-slate-600 mt-2 truncate">
-                  {followingSchool ? followingSchool.city : ''}
+                  {isRound3 ? '' : followingSchool ? followingSchool.city : ''}
                 </div>
               </div>
               <div className="text-[11px] text-slate-500 pt-3 border-t border-slate-800/80 mt-3">
@@ -294,7 +327,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ setActiveTab }) =>
               { id: 'current_round', label: 'Round Objectives' },
               { id: 'live_run', label: 'Now Playing (Live)' },
               { id: 'leaderboard', label: 'Full Leaderboard' },
-              { id: 'robot_war', label: 'Robot War Battle' },
+              { id: 'robot_war', label: 'Robo War Battle' },
               { id: 'winner', label: 'Grand Champion' }
             ].map((st) => (
               <button
@@ -359,10 +392,10 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ setActiveTab }) =>
         >
           <div className="flex items-center justify-between text-xs font-bold text-cyan-400 mb-2">
             <span>ROUND 1</span>
-            <span className="px-2 py-0.5 rounded bg-cyan-500/10 text-cyan-300">BLOCK PUSH</span>
+            <span className="px-2 py-0.5 rounded bg-cyan-500/10 text-cyan-300">ROBO PUSH</span>
           </div>
           <h3 className="text-base font-bold text-white group-hover:text-cyan-300 transition">
-            Block Push Challenge
+            Robo Push Challenge
           </h3>
           <p className="text-xs text-slate-400 mt-1">
             Target zones, precision weight displacement, autonomous bonuses & penalties.
@@ -383,10 +416,10 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ setActiveTab }) =>
         >
           <div className="flex items-center justify-between text-xs font-bold text-amber-400 mb-2">
             <span>ROUND 2</span>
-            <span className="px-2 py-0.5 rounded bg-amber-500/10 text-amber-300">BLOCK PULL</span>
+            <span className="px-2 py-0.5 rounded bg-amber-500/10 text-amber-300">ROBO PULL</span>
           </div>
           <h3 className="text-base font-bold text-white group-hover:text-amber-300 transition">
-            Block Pull Challenge
+            Robo Pull Challenge
           </h3>
           <p className="text-xs text-slate-400 mt-1">
             High-friction sled tow, 1.0kg to 4.0kg tiers, distance factors, traction bonuses.
@@ -407,16 +440,16 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ setActiveTab }) =>
         >
           <div className="flex items-center justify-between text-xs font-bold text-rose-400 mb-2">
             <span>ROUND 3</span>
-            <span className="px-2 py-0.5 rounded bg-rose-500/10 text-rose-300">ROBOT WAR</span>
+            <span className="px-2 py-0.5 rounded bg-rose-500/10 text-rose-300">ROBO WAR</span>
           </div>
           <h3 className="text-base font-bold text-white group-hover:text-rose-300 transition">
-            Robot War Arena
+            Robo War Arena
           </h3>
           <p className="text-xs text-slate-400 mt-1">
             Head-to-head combat face-offs, knockout & decision scoring, arena domination.
           </p>
           <div className="mt-4 flex items-center text-xs text-amber-400 font-semibold group-hover:translate-x-1 transition">
-            <span>Open Robot War Matchups</span>
+            <span>Open Robo War Matchups</span>
             <ArrowRight className="w-3.5 h-3.5 ml-1" />
           </div>
         </div>

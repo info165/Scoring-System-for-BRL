@@ -21,7 +21,7 @@ export interface School {
   isActive: boolean;
 }
 
-// --- ROUND 1: BLOCK PUSH CHALLENGE ---
+// --- ROUND 1: ROBO PUSH CHALLENGE ---
 export type PushBlockStatus = 'none' | 'complete' | 'incomplete';
 
 export interface BlockPushBlockEntry {
@@ -85,7 +85,7 @@ export interface PublishedRunResult {
   };
 }
 
-// --- ROUND 2: BLOCK PULL CHALLENGE ---
+// --- ROUND 2: ROBO PULL CHALLENGE ---
 export interface BlockPullScore {
   pulledBlockIds: string[]; // IDs of weights successfully pulled
   blockScore: number; // sum of pulled block weights
@@ -121,13 +121,16 @@ export interface RobotWarMatch {
   status: 'scheduled' | 'live' | 'completed';
   isDraft: boolean;
   publishedAt?: string;
+  // Challenger match: the odd team out gets an opponent. The challenger is the team playing for the
+  // second time; it never earns points in this match (win, lose or draw). Null for a normal match.
+  challengerId?: string | null;
 }
 
 export interface TeamScoreRecord {
   schoolId: string;
   round1: BlockPushScore | null;
   round2: BlockPullScore | null;
-  round3Score: number; // accumulated from published Robot War matches
+  round3Score: number; // accumulated from published Robo War matches
   totalScore: number;
 }
 
@@ -201,7 +204,7 @@ export interface ArenaTimerState {
   stopTimestamp: number | null; // epoch ms
   round: 1 | 2 | 3;
   schoolId: string | null;
-  // Round 3 only: the Robot War match this clock belongs to.
+  // Round 3 only: the Robo War match this clock belongs to.
   matchId?: string | null;
 }
 

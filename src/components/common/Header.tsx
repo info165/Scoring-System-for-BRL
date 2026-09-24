@@ -53,9 +53,9 @@ export const Header: React.FC<HeaderProps> = ({ activeTab, setActiveTab, activeV
     { id: 'dashboard', label: '1. Dashboard', roles: ['ADMIN', 'CONTROLLER', 'EVALUATOR'] },
     { id: 'live_control', label: '2. Live Control & Queue', roles: ['ADMIN', 'CONTROLLER'] },
     { id: 'schools', label: '3. Schools / Teams', roles: ['ADMIN', 'CONTROLLER'] },
-    { id: 'round_1', label: '4. Round 1: Block Push', roles: ['ADMIN', 'CONTROLLER', 'EVALUATOR'] },
-    { id: 'round_2', label: '5. Round 2: Block Pull', roles: ['ADMIN', 'CONTROLLER', 'EVALUATOR'] },
-    { id: 'round_3', label: '6. Round 3: Robot War', roles: ['ADMIN', 'CONTROLLER', 'EVALUATOR'] },
+    { id: 'round_1', label: '4. Round 1: Robo Push', roles: ['ADMIN', 'CONTROLLER', 'EVALUATOR'] },
+    { id: 'round_2', label: '5. Round 2: Robo Pull', roles: ['ADMIN', 'CONTROLLER', 'EVALUATOR'] },
+    { id: 'round_3', label: '6. Round 3: Robo War', roles: ['ADMIN', 'CONTROLLER', 'EVALUATOR'] },
     { id: 'leaderboard', label: '7. Leaderboard', roles: ['ADMIN', 'CONTROLLER', 'EVALUATOR'] },
     { id: 'score_history', label: '8. Score History', roles: ['ADMIN', 'CONTROLLER', 'EVALUATOR'] },
     { id: 'display_view', label: '9. Display Mode', roles: ['ADMIN', 'CONTROLLER', 'EVALUATOR'] },
@@ -168,6 +168,16 @@ export const Header: React.FC<HeaderProps> = ({ activeTab, setActiveTab, activeV
 
           {/* View Mode Switching & Launch Public Display Window */}
           <div className="flex items-center space-x-2">
+            {/* Undo for screens too narrow for the quick action bar */}
+            {canUndo && (
+              <button
+                onClick={undoLastAction}
+                title="Undo last action"
+                className="2xl:hidden p-1.5 text-slate-400 hover:text-white hover:bg-slate-800 rounded-lg border border-slate-800 transition"
+              >
+                <RotateCcw className="w-4 h-4" />
+              </button>
+            )}
             {/* Real-time Firebase Cloud Sync Badge */}
             <div className="hidden md:flex items-center space-x-1.5 px-2.5 py-1 bg-slate-900/90 border border-slate-700/70 rounded-lg text-xs">
               {isFirebaseSyncing ? (

@@ -318,7 +318,7 @@ export const Round1BlockPushView: React.FC = () => {
     });
 
     setFeedbackMsg({ 
-      text: `Score of ${scoreCalculation.finalScore} PTS published for ${activeSchool?.name}!`, 
+      text: `Score of ${scoreCalculation.finalScore} PTS published for ${activeSchool?.name} (${activeSchool?.teamName})!`, 
       type: 'success' 
     });
     setTimeout(() => setFeedbackMsg(null), 4000);
@@ -369,7 +369,7 @@ export const Round1BlockPushView: React.FC = () => {
               </span>
             </div>
             <h1 className="text-base sm:text-lg font-display font-bold text-white tracking-wide">
-              BLOCK PUSH EVALUATOR CONSOLE
+              ROBO PUSH EVALUATOR CONSOLE
             </h1>
           </div>
         </div>
@@ -493,7 +493,7 @@ export const Round1BlockPushView: React.FC = () => {
                   >
                     {state.schools.map(s => (
                       <option key={s.id} value={s.id}>
-                        Switch Team: {s.teamNumber} - {s.name}
+                        Switch Team: {s.teamNumber} - {s.name} ({s.teamName})
                       </option>
                     ))}
                   </select>
@@ -952,7 +952,7 @@ export const Round1BlockPushView: React.FC = () => {
             </div>
 
             <p className="text-xs text-slate-300 leading-relaxed">
-              This will clear all block selections, restore the timer to <strong className="text-white">01:20</strong>, and reset the score for <strong className="text-amber-300">{activeSchool?.name || 'the active team'}</strong>.
+              This will clear all block selections, restore the timer to <strong className="text-white">01:20</strong>, and reset the score for <strong className="text-amber-300">{activeSchool ? `${activeSchool.name} (${activeSchool.teamName})` : 'the active team'}</strong>.
             </p>
 
             <div className="flex items-center gap-2 pt-2 border-t border-slate-800">

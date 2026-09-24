@@ -165,7 +165,7 @@ export const Round2BlockPullView: React.FC = () => {
     });
     setIsPreviewModalOpen(false);
     setFeedbackMsg({ 
-      text: `Score of ${scoreCalculation.finalScore} PTS officially published for ${activeSchool?.name}!`, 
+      text: `Score of ${scoreCalculation.finalScore} PTS officially published for ${activeSchool?.name} (${activeSchool?.teamName})!`, 
       type: 'success' 
     });
     setTimeout(() => setFeedbackMsg(null), 4000);
@@ -186,7 +186,7 @@ export const Round2BlockPullView: React.FC = () => {
                 <span>ROUND 2 • OFFICIAL SCORING ENGINE</span>
               </div>
               <h2 className="text-xl sm:text-2xl font-display font-bold text-white">
-                BLOCK PULL CHALLENGE
+                ROBO PULL CHALLENGE
               </h2>
               <p className="text-xs text-slate-300 mt-0.5">
                 Total Time: 120s • Full points per pulled block • Time Left: 1 pt/sec bonus • Boundary Touch: -5 pts penalty each

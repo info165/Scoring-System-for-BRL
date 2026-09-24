@@ -29,6 +29,7 @@ export const Round3RobotWarView: React.FC = () => {
     activeRobotWarMatch,
     setActiveRobotWarMatch,
     createRobotWarMatch,
+    setMatchChallenger,
     deleteRobotWarMatch,
     saveRobotWarDraft,
     publishRobotWarResult,
@@ -39,6 +40,7 @@ export const Round3RobotWarView: React.FC = () => {
   const [newTeamA, setNewTeamA] = useState('');
   const [newTeamB, setNewTeamB] = useState('');
   const [newNotes, setNewNotes] = useState('');
+  const [newChallengerId, setNewChallengerId] = useState('');
   const [confirmDeleteMatchId, setConfirmDeleteMatchId] = useState<string | null>(null);
 
   // Active match input states
@@ -146,6 +148,15 @@ export const Round3RobotWarView: React.FC = () => {
         loserPoints: 0
       };
 
+  // Challenger rule: the challenger (playing for the second time) never earns points in this match.
+  const challengerId = activeRobotWarMatch?.challengerId ?? null;
+  const teamAIsChallenger = !!challengerId && challengerId === activeRobotWarMatch?.teamAId;
+  const teamBIsChallenger = !!challengerId && challengerId === activeRobotWarMatch?.teamBId;
+  const shownTeamAPoints = teamAIsChallenger ? 0 : calculation.teamAPoints;
+  const shownTeamBPoints = teamBIsChallenger ? 0 : calculation.teamBPoints;
+  const shownMainPoints = Math.max(shownTeamAPoints, shownTeamBPoints);
+  const winnerIsChallenger = (selectedWinner === 'team_a' && teamAIsChallenger) || (selectedWinner === 'team_b' && teamBIsChallenger);
+
   const isFormValid = !!(
     activeRobotWarMatch &&
     teamASchool &&
@@ -156,14 +167,26 @@ export const Round3RobotWarView: React.FC = () => {
     timeLeftSeconds <= 90
   );
 
+  // A team that already has a match on the board and is being scheduled again is the natural challenger.
+  const suggestChallenger = (a: string, b: string): string => {
+    if (!a || !b || a === b) return '';
+    const played = (id: string) => state.robotWarMatches.some(m => m.teamAId === id || m.teamBId === id);
+    const aPlayed = played(a);
+    const bPlayed = played(b);
+    if (aPlayed && !bPlayed) return a;
+    if (bPlayed && !aPlayed) return b;
+    return '';
+  };
+
   const handleCreateMatch = (e: React.FormEvent) => {
     e.preventDefault();
     if (!newTeamA || !newTeamB || newTeamA === newTeamB) return;
-    createRobotWarMatch(newTeamA, newTeamB, newNotes);
+    createRobotWarMatch(newTeamA, newTeamB, newNotes, newChallengerId || null);
     setIsCreateModalOpen(false);
     setNewTeamA('');
     setNewTeamB('');
     setNewNotes('');
+    setNewChallengerId('');
   };
 
   const handleSaveDraft = () => {
@@ -186,13 +209,17 @@ export const Round3RobotWarView: React.FC = () => {
     setIsPreviewModalOpen(false);
     if (selectedWinner === 'draw') {
       setFeedbackMsg({
-        text: `Robot War result published! Match ended in a draw — both teams awarded ${ROBO_WAR_CONFIG.drawPoints} PTS.`,
+        text: challengerId
+          ? `Robo War result published! Match ended in a draw — ${ROBO_WAR_CONFIG.drawPoints} PTS to the non-challenger team only.`
+          : `Robo War result published! Match ended in a draw — both teams awarded ${ROBO_WAR_CONFIG.drawPoints} PTS.`,
         type: 'success'
       });
     } else {
       const winnerSchool = selectedWinner === 'team_a' ? teamASchool : teamBSchool;
       setFeedbackMsg({
-        text: `Robot War result published! ${winnerSchool?.name} awarded ${calculation.winnerPoints} PTS.`,
+        text: winnerIsChallenger
+          ? `Robo War result published! ${winnerSchool?.name} won as the challenger, so no points are recorded. Their original match points are unchanged.`
+          : `Robo War result published! ${winnerSchool?.name} awarded ${calculation.winnerPoints} PTS.`,
         type: 'success'
       });
     }
@@ -308,10 +335,17 @@ export const Round3RobotWarView: React.FC = () => {
                 <div className="text-xs font-bold text-white truncate">
                   {teamA?.name || 'Team A'}
                 </div>
+                {teamA && <div className="text-[11px] text-cyan-300 truncate">{teamA.teamName}</div>}
                 <div className="text-[11px] text-red-400 font-mono">vs</div>
                 <div className="text-xs font-bold text-white truncate">
                   {teamB?.name || 'Team B'}
                 </div>
+                {teamB && <div className="text-[11px] text-cyan-300 truncate">{teamB.teamName}</div>}
+                {match.challengerId && (
+                  <div className="mt-1 text-[10px] font-mono font-bold text-amber-300 truncate">
+                    CHALLENGER: {state.schools.find(s => s.id === match.challengerId)?.teamName || '—'}
+                  </div>
+                )}
 
                 {!isCompleted && (
                   <button
@@ -364,6 +398,9 @@ export const Round3RobotWarView: React.FC = () => {
                     <span className="text-xs font-mono font-bold px-2 py-0.5 rounded bg-red-500/20 text-red-300 border border-red-500/30">
                       TEAM A • {teamASchool.teamNumber}
                     </span>
+                    {teamAIsChallenger && (
+                      <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded bg-amber-500/20 text-amber-300 border border-amber-500/40">CHALLENGER • NO POINTS</span>
+                    )}
                     {selectedWinner === 'team_a' && (
                       <span className="text-xs font-bold text-red-400 flex items-center gap-1 uppercase tracking-wider">
                         <Trophy className="w-3.5 h-3.5" /> WINNER
@@ -386,7 +423,7 @@ export const Round3RobotWarView: React.FC = () => {
                     <span className={`text-2xl font-display font-black ${
                       selectedWinner === 'team_a' || selectedWinner === 'draw' ? 'text-red-400' : 'text-slate-600'
                     }`}>
-                      {selectedWinner === 'team_a' ? `${calculation.winnerPoints} PTS` : selectedWinner === 'draw' ? `${calculation.teamAPoints} PTS` : '0 PTS'}
+                      {selectedWinner === 'team_a' || selectedWinner === 'draw' ? `${shownTeamAPoints} PTS` : '0 PTS'}
                     </span>
                   </div>
                 </div>
@@ -404,6 +441,9 @@ export const Round3RobotWarView: React.FC = () => {
                     <span className="text-xs font-mono font-bold px-2 py-0.5 rounded bg-blue-500/20 text-blue-300 border border-blue-500/30">
                       TEAM B • {teamBSchool.teamNumber}
                     </span>
+                    {teamBIsChallenger && (
+                      <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded bg-amber-500/20 text-amber-300 border border-amber-500/40">CHALLENGER • NO POINTS</span>
+                    )}
                     {selectedWinner === 'team_b' && (
                       <span className="text-xs font-bold text-red-400 flex items-center gap-1 uppercase tracking-wider">
                         <Trophy className="w-3.5 h-3.5" /> WINNER
@@ -426,7 +466,7 @@ export const Round3RobotWarView: React.FC = () => {
                     <span className={`text-2xl font-display font-black ${
                       selectedWinner === 'team_b' || selectedWinner === 'draw' ? 'text-red-400' : 'text-slate-600'
                     }`}>
-                      {selectedWinner === 'team_b' ? `${calculation.winnerPoints} PTS` : selectedWinner === 'draw' ? `${calculation.teamBPoints} PTS` : '0 PTS'}
+                      {selectedWinner === 'team_b' || selectedWinner === 'draw' ? `${shownTeamBPoints} PTS` : '0 PTS'}
                     </span>
                   </div>
                 </div>
@@ -453,6 +493,35 @@ export const Round3RobotWarView: React.FC = () => {
                   {ROBO_WAR_CONFIG.drawPoints} PTS EACH
                 </span>
               </button>
+
+              {/* Challenger control */}
+              <div className={`mt-4 p-4 rounded-2xl border ${challengerId ? 'bg-amber-950/30 border-amber-500/50' : 'bg-slate-950/60 border-slate-800'}`}>
+                <div className="text-xs font-bold text-amber-300 uppercase tracking-wider mb-2">Challenger match?</div>
+                <div className="flex flex-wrap gap-2">
+                  {[
+                    { id: null as string | null, label: 'Normal match' },
+                    { id: teamASchool.id, label: `${teamASchool.name} — ${teamASchool.teamName} is the challenger` },
+                    { id: teamBSchool.id, label: `${teamBSchool.name} — ${teamBSchool.teamName} is the challenger` }
+                  ].map(opt => (
+                    <button
+                      key={opt.id ?? 'none'}
+                      type="button"
+                      disabled={isTimerRunning}
+                      onClick={() => setMatchChallenger(activeRobotWarMatch.id, opt.id)}
+                      className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition disabled:opacity-40 ${
+                        (challengerId ?? null) === opt.id
+                          ? 'bg-amber-500 text-slate-950 border-amber-400'
+                          : 'bg-slate-900 text-slate-300 border-slate-700 hover:border-slate-500'
+                      }`}
+                    >
+                      {opt.label}
+                    </button>
+                  ))}
+                </div>
+                <p className="text-[11px] text-slate-400 mt-2">
+                  The challenger is the team playing for the second time. It earns no points in this match (win, lose or draw) and its original match points are never changed. If the other team wins, that team gets the points.
+                </p>
+              </div>
 
               {!selectedWinner && (
                 <div className="mt-4 p-3 rounded-xl bg-amber-950/40 border border-amber-600/50 text-amber-200 text-xs flex items-center gap-2 font-medium">
@@ -686,12 +755,14 @@ export const Round3RobotWarView: React.FC = () => {
 
               <div className="mt-2 mb-4">
                 <div className="text-5xl font-display font-black text-white tracking-tight">
-                  {selectedWinner === 'draw' ? calculation.teamAPoints : calculation.winnerPoints}
+                  {shownMainPoints}
                   <span className="text-lg font-normal text-red-300 ml-2 font-mono">PTS</span>
                 </div>
                 <div className="text-xs text-slate-400 mt-1">
-                  {selectedWinner === 'draw'
-                    ? 'Awarded to Both Teams (Draw)'
+                  {winnerIsChallenger
+                    ? 'Challenger won — no points recorded'
+                    : selectedWinner === 'draw'
+                    ? (challengerId ? 'Awarded to the non-challenger team only (Draw)' : 'Awarded to Both Teams (Draw)')
                     : `Awarded to Winner (${selectedWinner ? (selectedWinner === 'team_a' ? teamASchool.teamName : teamBSchool.teamName) : 'Select Winner'})`}
                 </div>
               </div>
@@ -725,15 +796,17 @@ export const Round3RobotWarView: React.FC = () => {
                   <span className="text-slate-300">Calculation:</span>
                   <span className="font-mono font-bold text-white">
                     {selectedWinner === 'draw'
-                      ? `Draw = ${ROBO_WAR_CONFIG.drawPoints} pts each`
-                      : `${timeLeftSeconds} × ${calculation.multiplier} = ${calculation.winnerPoints} pts`}
+                      ? (challengerId ? `Draw = ${ROBO_WAR_CONFIG.drawPoints} pts (non-challenger)` : `Draw = ${ROBO_WAR_CONFIG.drawPoints} pts each`)
+                      : winnerIsChallenger
+                        ? `${timeLeftSeconds} × ${calculation.multiplier} = ${calculation.winnerPoints}, challenger = 0 pts`
+                        : `${timeLeftSeconds} × ${calculation.multiplier} = ${calculation.winnerPoints} pts`}
                   </span>
                 </div>
 
                 <div className="flex items-center justify-between">
                   <span className="text-slate-300">{selectedWinner === 'draw' ? 'Other Team:' : 'Loser Points:'}</span>
                   <span className="font-mono font-bold text-slate-500">
-                    {selectedWinner === 'draw' ? `${ROBO_WAR_CONFIG.drawPoints} pts (Draw)` : '0 pts (Winner Takes All)'}
+                    {selectedWinner === 'draw' ? (challengerId ? '0 pts (Challenger)' : `${ROBO_WAR_CONFIG.drawPoints} pts (Draw)`) : '0 pts (Winner Takes All)'}
                   </span>
                 </div>
               </div>
@@ -789,7 +862,7 @@ export const Round3RobotWarView: React.FC = () => {
       ) : (
         <div className="bg-slate-900/90 border border-slate-800 rounded-2xl p-12 text-center text-slate-400">
           <Swords className="w-10 h-10 mx-auto text-slate-600 mb-3" />
-          <p className="text-base font-medium text-slate-300">No Robot War match selected.</p>
+          <p className="text-base font-medium text-slate-300">No Robo War match selected.</p>
           <p className="text-xs text-slate-500 mt-1">Select an arena match above or click "Schedule Match" to add one.</p>
         </div>
       )}
@@ -803,7 +876,7 @@ export const Round3RobotWarView: React.FC = () => {
                 SCORE PREVIEW & CONFIRMATION
               </div>
               <h3 className="text-2xl font-display font-black text-white mt-1">
-                Publish Robot War Result
+                Publish Robo War Result
               </h3>
               <p className="text-xs text-slate-400 mt-0.5">
                 Verify the combat breakdown below before broadcasting this match result to the auditorium.
@@ -817,10 +890,10 @@ export const Round3RobotWarView: React.FC = () => {
                 <div className="font-bold text-white truncate">{teamASchool.name}</div>
                 <div className="text-red-400 font-mono font-bold text-sm mt-1">
                   {selectedWinner === 'team_a'
-                    ? `${calculation.winnerPoints} PTS (WINNER)`
+                    ? `${shownTeamAPoints} PTS (WINNER${teamAIsChallenger ? ', CHALLENGER' : ''})`
                     : selectedWinner === 'draw'
-                      ? `${calculation.teamAPoints} PTS (DRAW)`
-                      : '0 PTS (LOSER)'}
+                      ? `${shownTeamAPoints} PTS (DRAW${teamAIsChallenger ? ', CHALLENGER' : ''})`
+                      : `0 PTS (LOSER${teamAIsChallenger ? ', CHALLENGER' : ''})`}
                 </div>
               </div>
               <div>
@@ -828,10 +901,10 @@ export const Round3RobotWarView: React.FC = () => {
                 <div className="font-bold text-white truncate">{teamBSchool.name}</div>
                 <div className="text-blue-400 font-mono font-bold text-sm mt-1">
                   {selectedWinner === 'team_b'
-                    ? `${calculation.winnerPoints} PTS (WINNER)`
+                    ? `${shownTeamBPoints} PTS (WINNER${teamBIsChallenger ? ', CHALLENGER' : ''})`
                     : selectedWinner === 'draw'
-                      ? `${calculation.teamBPoints} PTS (DRAW)`
-                      : '0 PTS (LOSER)'}
+                      ? `${shownTeamBPoints} PTS (DRAW${teamBIsChallenger ? ', CHALLENGER' : ''})`
+                      : `0 PTS (LOSER${teamBIsChallenger ? ', CHALLENGER' : ''})`}
                 </div>
               </div>
             </div>
@@ -862,9 +935,9 @@ export const Round3RobotWarView: React.FC = () => {
               </div>
 
               <div className="flex justify-between items-center pt-2 border-t-2 border-slate-700 font-bold">
-                <span className="text-white text-sm">{selectedWinner === 'draw' ? 'EACH TEAM AWARDED:' : 'WINNER AWARDED SCORE:'}</span>
+                <span className="text-white text-sm">{selectedWinner === 'draw' && !challengerId ? 'EACH TEAM AWARDED:' : 'POINTS RECORDED:'}</span>
                 <span className="text-2xl font-display font-black text-red-400">
-                  {selectedWinner === 'draw' ? calculation.teamAPoints : calculation.winnerPoints} PTS
+                  {shownMainPoints} PTS
                 </span>
               </div>
             </div>
@@ -900,9 +973,9 @@ export const Round3RobotWarView: React.FC = () => {
       {/* SCHEDULE MATCH MODAL */}
       {isCreateModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
-          <div className="bg-slate-900 border-2 border-red-500/80 rounded-3xl p-6 sm:p-8 max-w-md w-full shadow-2xl relative space-y-5">
+          <div className="bg-slate-900 border-2 border-red-500/80 rounded-3xl p-6 sm:p-8 max-w-2xl w-full shadow-2xl relative space-y-5">
             <h3 className="text-xl font-display font-bold text-white">
-              Schedule New Robot War Match
+              Schedule New Robo War Match
             </h3>
 
             <form onSubmit={handleCreateMatch} className="space-y-4">
@@ -912,14 +985,14 @@ export const Round3RobotWarView: React.FC = () => {
                 </label>
                 <select
                   value={newTeamA}
-                  onChange={(e) => setNewTeamA(e.target.value)}
+                  onChange={(e) => { setNewTeamA(e.target.value); setNewChallengerId(suggestChallenger(e.target.value, newTeamB)); }}
                   className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-red-500"
                   required
                 >
                   <option value="">Select Team A School...</option>
                   {state.schools.map(s => (
                     <option key={s.id} value={s.id} disabled={s.id === newTeamB}>
-                      {s.name} ({s.teamNumber})
+                      {s.name} — {s.teamName} ({s.teamNumber})
                     </option>
                   ))}
                 </select>
@@ -931,15 +1004,31 @@ export const Round3RobotWarView: React.FC = () => {
                 </label>
                 <select
                   value={newTeamB}
-                  onChange={(e) => setNewTeamB(e.target.value)}
+                  onChange={(e) => { setNewTeamB(e.target.value); setNewChallengerId(suggestChallenger(newTeamA, e.target.value)); }}
                   className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-red-500"
                   required
                 >
                   <option value="">Select Team B School...</option>
                   {state.schools.map(s => (
                     <option key={s.id} value={s.id} disabled={s.id === newTeamA}>
-                      {s.name} ({s.teamNumber})
+                      {s.name} — {s.teamName} ({s.teamNumber})
                     </option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-300 uppercase tracking-wider mb-1">
+                  Challenger (plays for the 2nd time, earns no points):
+                </label>
+                <select
+                  value={newChallengerId}
+                  onChange={(e) => setNewChallengerId(e.target.value)}
+                  className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-amber-500"
+                >
+                  <option value="">None (normal match)</option>
+                  {[newTeamA, newTeamB].filter(Boolean).map(id => (
+                    <option key={id} value={id}>{(() => { const t = state.schools.find(x => x.id === id); return t ? `${t.name} — ${t.teamName}` : id; })()}</option>
                   ))}
                 </select>
               </div>

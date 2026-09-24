@@ -48,7 +48,7 @@ export const RoundOverviewScreen: React.FC = () => {
                 EVENT 1 • BLUE THEME
               </span>
               <h2 className="text-4xl sm:text-6xl font-display font-black text-white">
-                BLOCK PUSH CHALLENGE
+                ROBO PUSH CHALLENGE
               </h2>
               <p className="text-slate-300 text-base sm:text-lg max-w-2xl mx-auto">
                 Push blocks across the arena floor into the designated scoring box within 120 seconds.
@@ -105,7 +105,7 @@ export const RoundOverviewScreen: React.FC = () => {
                 EVENT 2 • GREEN THEME
               </span>
               <h2 className="text-4xl sm:text-6xl font-display font-black text-white">
-                BLOCK PULL CHALLENGE
+                ROBO PULL CHALLENGE
               </h2>
               <p className="text-slate-300 text-base sm:text-lg max-w-2xl mx-auto">
                 Two-member team: Member 1 hooks block, Member 2 drives robot from Point A to the finish line within 120 seconds.
@@ -133,7 +133,7 @@ export const RoundOverviewScreen: React.FC = () => {
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-xs text-slate-300">
               <div className="bg-slate-900/60 border border-slate-800 rounded-2xl p-5">
                 <span className="font-bold text-emerald-400 uppercase tracking-wider block mb-1">
-                  Block Pull Scoring:
+                  Robo Pull Scoring:
                 </span>
                 <p>Each block successfully pulled across the finish line awards its official full points.</p>
               </div>

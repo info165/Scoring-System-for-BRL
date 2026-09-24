@@ -38,9 +38,9 @@ export const ResultRevealScreen: React.FC = () => {
   const activeBlocks = blocks.filter(b => b.status !== 'none');
 
   const roundTitle = round === 1 
-    ? 'BLOCK PUSH CHALLENGE' 
+    ? 'ROBO PUSH CHALLENGE' 
     : round === 2 
-      ? 'BLOCK PULL CHALLENGE' 
+      ? 'ROBO PULL CHALLENGE' 
       : 'ROBO WAR ARENA COMBAT';
 
   return (
@@ -219,7 +219,7 @@ export const ResultRevealScreen: React.FC = () => {
                 </div>
               )}
 
-              {/* Round 2 Block Pull Breakdown */}
+              {/* Round 2 Robo Pull Breakdown */}
               {round === 2 && (
                 <div className="grid grid-cols-1 sm:grid-cols-4 gap-3 pt-1">
                   <div className="bg-slate-950/90 border border-slate-800 rounded-xl p-3 text-left">

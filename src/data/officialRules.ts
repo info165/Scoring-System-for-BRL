@@ -64,10 +64,10 @@ export const OFFICIAL_BLOCK_WEIGHTS: BlockWeightDefinition[] = [
   }
 ];
 
-// --- EVENT 1: BLOCK PUSH CHALLENGE ---
+// --- EVENT 1: ROBO PUSH CHALLENGE ---
 // Theme: BLUE (#2563eb / #3b82f6)
 export const BLOCK_PUSH_CONFIG = {
-  eventName: 'Block Push Challenge',
+  eventName: 'Robo Push Challenge',
   themeColor: 'blue',
   totalTimeSeconds: 120,
   maxTimeBonus: 120,
@@ -116,10 +116,10 @@ export const calculateBlockPushScore = (
   };
 };
 
-// --- EVENT 2: BLOCK PULL CHALLENGE ---
+// --- EVENT 2: ROBO PULL CHALLENGE ---
 // Theme: GREEN (#059669 / #10b981)
 export const BLOCK_PULL_CONFIG = {
-  eventName: 'Block Pull Challenge',
+  eventName: 'Robo Pull Challenge',
   themeColor: 'green',
   totalTimeSeconds: 120,
   maxTimeBonus: 120,

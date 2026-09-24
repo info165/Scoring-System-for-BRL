@@ -50,8 +50,8 @@ export const NowPlayingScreen: React.FC = () => {
               <span>BHARAT ROBOTICS LEAGUE 2026 • OFFICIAL ARENA</span>
             </div>
             <h1 className="text-xl sm:text-2xl font-display font-bold text-white tracking-wide">
-              {currentRound === 1 && 'ROUND 1 — BLOCK PUSH CHALLENGE'}
-              {currentRound === 2 && 'ROUND 2 — BLOCK PULL CHALLENGE'}
+              {currentRound === 1 && 'ROUND 1 — ROBO PUSH CHALLENGE'}
+              {currentRound === 2 && 'ROUND 2 — ROBO PULL CHALLENGE'}
               {currentRound === 3 && 'ROUND 3 — ROBO WAR ARENA COMBAT'}
             </h1>
           </div>

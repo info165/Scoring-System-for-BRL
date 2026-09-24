@@ -52,7 +52,8 @@ export const LiveControlView: React.FC<LiveControlViewProps> = ({ setActiveTab }
   const getMatchLabel = (match: (typeof state.robotWarMatches)[number]) => {
     const teamA = state.schools.find(s => s.id === match.teamAId);
     const teamB = state.schools.find(s => s.id === match.teamBId);
-    return `${teamA?.name || 'TBD'} vs ${teamB?.name || 'TBD'}`;
+    const describe = (t?: (typeof state.schools)[number]) => (t ? `${t.name} (${t.teamName})` : 'TBD');
+    return `${describe(teamA)} vs ${describe(teamB)}`;
   };
 
   const scheduledMatches = state.robotWarMatches.filter(m => m.status === 'scheduled');
@@ -78,7 +79,7 @@ export const LiveControlView: React.FC<LiveControlViewProps> = ({ setActiveTab }
     { id: 'current_round', label: '2. Current Round', desc: 'Active round title and rules summary' },
     { id: 'live_run', label: '3. Now Playing / Run', desc: 'Current team playing, score & queue' },
     { id: 'leaderboard', label: '4. Live Leaderboard', desc: 'Stage-wide official ranking table' },
-    { id: 'robot_war', label: '5. Robot War Match', desc: 'Head-to-head arena combat split screen' },
+    { id: 'robot_war', label: '5. Robo War Match', desc: 'Head-to-head arena combat split screen' },
     { id: 'winner', label: '6. Grand Champion', desc: 'Championship celebration & podium screen' }
   ];
 
@@ -101,9 +102,9 @@ export const LiveControlView: React.FC<LiveControlViewProps> = ({ setActiveTab }
         {/* Round Switcher */}
         <div className="flex items-center space-x-1.5 bg-slate-950 p-1.5 rounded-lg border border-slate-800 self-start sm:self-auto">
           {[
-            { r: 1 as const, label: 'Round 1: Push' },
-            { r: 2 as const, label: 'Round 2: Pull' },
-            { r: 3 as const, label: 'Round 3: War' },
+            { r: 1 as const, label: 'Round 1: Robo Push' },
+            { r: 2 as const, label: 'Round 2: Robo Pull' },
+            { r: 3 as const, label: 'Round 3: Robo War' },
           ].map((item) => (
             <button
               key={item.r}
@@ -139,10 +140,16 @@ export const LiveControlView: React.FC<LiveControlViewProps> = ({ setActiveTab }
             {isRobotWar ? (
               activeRobotWarMatch ? (
                 <div className="space-y-3 mt-2">
-                  <div className="text-xl font-display font-bold text-white leading-tight">
-                    <span>{activeMatchTeamA?.name || 'TBD'}</span>
-                    <span className="text-red-400 mx-2">VS</span>
-                    <span>{activeMatchTeamB?.name || 'TBD'}</span>
+                  <div className="flex flex-wrap items-center gap-x-3 gap-y-2 leading-tight">
+                    <div>
+                      <div className="text-xl font-display font-bold text-white">{activeMatchTeamA?.name || 'TBD'}</div>
+                      <div className="text-sm font-semibold text-cyan-300">{activeMatchTeamA?.teamName}</div>
+                    </div>
+                    <span className="text-red-400 font-display font-bold text-xl">VS</span>
+                    <div>
+                      <div className="text-xl font-display font-bold text-white">{activeMatchTeamB?.name || 'TBD'}</div>
+                      <div className="text-sm font-semibold text-cyan-300">{activeMatchTeamB?.teamName}</div>
+                    </div>
                   </div>
                   <div className="flex flex-wrap items-center gap-2">
                     <span className="px-2.5 py-0.5 rounded bg-cyan-500/20 text-cyan-300 font-mono text-xs font-bold border border-cyan-500/30">
@@ -169,7 +176,7 @@ export const LiveControlView: React.FC<LiveControlViewProps> = ({ setActiveTab }
                   <span className="px-2.5 py-0.5 rounded bg-cyan-500/20 text-cyan-300 font-mono text-xs font-bold border border-cyan-500/30">
                     {currentSchool.teamNumber}
                   </span>
-                  <span className="text-sm font-semibold text-slate-200">
+                  <span className="text-base font-bold text-cyan-300">
                     {currentSchool.teamName}
                   </span>
                   <span className="text-xs text-slate-400">• {currentSchool.city}</span>
@@ -285,7 +292,7 @@ export const LiveControlView: React.FC<LiveControlViewProps> = ({ setActiveTab }
               {isRobotWar ? (
                 upNextMatch ? (
                   <div>
-                    <div className="text-base font-bold text-white truncate">
+                    <div className="text-base font-bold text-white break-words">
                       {getMatchLabel(upNextMatch)}
                     </div>
                     <div className="text-xs text-slate-400 mt-0.5 truncate">
@@ -297,11 +304,11 @@ export const LiveControlView: React.FC<LiveControlViewProps> = ({ setActiveTab }
                 )
               ) : upNextSchool ? (
                 <div>
-                  <div className="text-base font-bold text-white truncate">
+                  <div className="text-base font-bold text-white break-words">
                     {upNextSchool.name}
                   </div>
-                  <div className="text-xs text-slate-400 mt-0.5 truncate">
-                    {upNextSchool.teamName} • {upNextSchool.teamNumber} • {upNextSchool.city}
+                  <div className="text-xs text-cyan-300 font-semibold mt-0.5 break-words">
+                    {upNextSchool.teamName} <span className="text-slate-400 font-normal">• {upNextSchool.teamNumber} • {upNextSchool.city}</span>
                   </div>
                 </div>
               ) : (
@@ -318,7 +325,7 @@ export const LiveControlView: React.FC<LiveControlViewProps> = ({ setActiveTab }
               {isRobotWar ? (
                 followingMatch ? (
                   <div>
-                    <div className="text-sm font-bold text-slate-200 truncate">
+                    <div className="text-sm font-bold text-slate-200 break-words">
                       {getMatchLabel(followingMatch)}
                     </div>
                     <div className="text-xs text-slate-400 mt-0.5 truncate">
@@ -330,11 +337,11 @@ export const LiveControlView: React.FC<LiveControlViewProps> = ({ setActiveTab }
                 )
               ) : followingSchool ? (
                 <div>
-                  <div className="text-sm font-bold text-slate-200 truncate">
+                  <div className="text-sm font-bold text-slate-200 break-words">
                     {followingSchool.name}
                   </div>
-                  <div className="text-xs text-slate-400 mt-0.5 truncate">
-                    {followingSchool.teamName} • {followingSchool.teamNumber} • {followingSchool.city}
+                  <div className="text-xs text-cyan-300 font-semibold mt-0.5 break-words">
+                    {followingSchool.teamName} <span className="text-slate-400 font-normal">• {followingSchool.teamNumber} • {followingSchool.city}</span>
                   </div>
                 </div>
               ) : (
@@ -422,12 +429,12 @@ export const LiveControlView: React.FC<LiveControlViewProps> = ({ setActiveTab }
                     key={match.id}
                     className="flex items-center justify-between p-2.5 bg-slate-950/60 border border-slate-800/80 rounded-lg text-xs hover:border-slate-700 transition"
                   >
-                    <div className="flex items-center space-x-2.5 truncate">
+                    <div className="flex items-center space-x-2.5 min-w-0">
                       <span className="font-mono font-bold text-slate-400 w-5 text-right">
                         {index + 1}.
                       </span>
-                      <div className="truncate">
-                        <span className="font-bold text-white truncate block">{getMatchLabel(match)}</span>
+                      <div className="min-w-0">
+                        <span className="font-bold text-white break-words block">{getMatchLabel(match)}</span>
                         <span className="text-[11px] text-slate-400">Match #{match.matchNumber} • {match.matchNotes || 'Arena Match'}</span>
                       </div>
                     </div>
@@ -455,13 +462,13 @@ export const LiveControlView: React.FC<LiveControlViewProps> = ({ setActiveTab }
                   key={school.id}
                   className="flex items-center justify-between p-2.5 bg-slate-950/60 border border-slate-800/80 rounded-lg text-xs hover:border-slate-700 transition"
                 >
-                  <div className="flex items-center space-x-2.5 truncate">
+                  <div className="flex items-center space-x-2.5 min-w-0">
                     <span className="font-mono font-bold text-slate-400 w-5 text-right">
                       {index + 1}.
                     </span>
-                    <div className="truncate">
-                      <span className="font-bold text-white truncate block">{school.name}</span>
-                      <span className="text-[11px] text-slate-400">{school.teamName} • {school.teamNumber}</span>
+                    <div className="min-w-0">
+                      <span className="font-bold text-white break-words block">{school.name}</span>
+                      <span className="text-[11px] text-cyan-300 font-semibold break-words block">{school.teamName} <span className="text-slate-400 font-normal">• {school.teamNumber}</span></span>
                     </div>
                   </div>
 
@@ -518,15 +525,15 @@ export const LiveControlView: React.FC<LiveControlViewProps> = ({ setActiveTab }
                   const teamA = state.schools.find(s => s.id === match.teamAId);
                   const teamB = state.schools.find(s => s.id === match.teamBId);
                   const winner = match.result === 'team_a_win' ? teamA : match.result === 'team_b_win' ? teamB : null;
-                  const resultLabel = match.result === 'draw' ? 'Draw' : winner ? `Winner: ${winner.name}` : 'Pending';
+                  const resultLabel = match.result === 'draw' ? 'Draw' : winner ? `Winner: ${winner.name} (${winner.teamName})` : 'Pending';
 
                   return (
                     <div
                       key={match.id}
                       className="flex items-center justify-between p-2.5 bg-slate-950/40 border border-slate-800/80 rounded-lg text-xs"
                     >
-                      <div className="truncate">
-                        <span className="font-medium text-slate-200 truncate block">{getMatchLabel(match)}</span>
+                      <div className="min-w-0">
+                        <span className="font-medium text-slate-200 break-words block">{getMatchLabel(match)}</span>
                         <span className="text-[11px] text-slate-400">Match #{match.matchNumber} • {resultLabel}</span>
                       </div>
 
@@ -535,8 +542,8 @@ export const LiveControlView: React.FC<LiveControlViewProps> = ({ setActiveTab }
                           {match.teamAPoints}-{match.teamBPoints}
                         </span>
                         <button
-                          onClick={() => setActiveRobotWarMatch(match.id)}
-                          title="Open this match again for review or correction"
+                          onClick={() => { setActiveRobotWarMatch(match.id); setActiveTab('round_3'); }}
+                          title="Open this match in the Round 3 scoring screen to review or correct it"
                           className="text-[10px] text-slate-400 hover:text-slate-200 px-1.5 py-0.5 rounded hover:bg-slate-800"
                         >
                           Review
@@ -566,9 +573,9 @@ export const LiveControlView: React.FC<LiveControlViewProps> = ({ setActiveTab }
                     key={school.id}
                     className="flex items-center justify-between p-2.5 bg-slate-950/40 border border-slate-800/80 rounded-lg text-xs"
                   >
-                    <div className="truncate">
-                      <span className="font-medium text-slate-200 truncate block">{school.name}</span>
-                      <span className="text-[11px] text-slate-400">{school.teamName} ({school.teamNumber})</span>
+                    <div className="min-w-0">
+                      <span className="font-medium text-slate-200 break-words block">{school.name}</span>
+                      <span className="text-[11px] text-cyan-300 font-semibold break-words block">{school.teamName} <span className="text-slate-400 font-normal">({school.teamNumber})</span></span>
                     </div>
 
                     <div className="flex items-center space-x-2">

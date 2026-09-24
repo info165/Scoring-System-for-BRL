@@ -32,7 +32,7 @@ export function useArenaTimer(round?: 1 | 2 | 3): ArenaTimerHookReturn {
     currentSchool
   } = useCompetition();
 
-  // A Robot War fight lasts 90 seconds; Rounds 1 and 2 last 120.
+  // A Robo War fight lasts 90 seconds; Rounds 1 and 2 last 120.
   const defaultTotal = round === 3 ? 90 : 120;
 
   const idleTimer = {

@@ -10,10 +10,12 @@ import {
   Users, 
   Database,
   Building,
-  MapPin
+  MapPin,
+  Download
 } from 'lucide-react';
 import { useCompetition } from '../../context/CompetitionContext';
 import { School } from '../../types';
+import { downloadTournamentBackup } from '../../utils/backup';
 
 export const SchoolsView: React.FC = () => {
   const { 
@@ -25,6 +27,15 @@ export const SchoolsView: React.FC = () => {
   } = useCompetition();
 
   const [searchQuery, setSearchQuery] = useState('');
+  // A team has played Round 3 once it has been in a published match, even if it lost and scored 0.
+  const round3PlayedIds = new Set<string>();
+  state.robotWarMatches.forEach(m => {
+    if (m.status === 'completed' && !m.isDraft) {
+      round3PlayedIds.add(m.teamAId);
+      round3PlayedIds.add(m.teamBId);
+    }
+  });
+
   const [filterCategory, setFilterCategory] = useState<'all' | 'r1_done' | 'r2_done' | 'r3_done' | 'not_played' | 'active'>('all');
 
   // Modal states
@@ -118,7 +129,7 @@ export const SchoolsView: React.FC = () => {
     const score = state.scores[school.id];
     const hasR1 = score?.round1 && !score.round1.isDraft;
     const hasR2 = score?.round2 && !score.round2.isDraft;
-    const hasR3 = (score?.round3Score || 0) > 0;
+    const hasR3 = round3PlayedIds.has(school.id);
 
     if (filterCategory === 'active') return school.isActive;
     if (filterCategory === 'r1_done') return hasR1;
@@ -231,7 +242,7 @@ export const SchoolsView: React.FC = () => {
                   const score = state.scores[school.id];
                   const hasR1 = !!(score?.round1 && !score.round1.isDraft);
                   const hasR2 = !!(score?.round2 && !score.round2.isDraft);
-                  const hasR3 = (score?.round3Score || 0) > 0;
+                  const hasR3 = round3PlayedIds.has(school.id);
 
                   return (
                     <tr key={school.id} className="hover:bg-slate-800/40 transition">
@@ -533,6 +544,14 @@ export const SchoolsView: React.FC = () => {
             <p className="text-xs text-slate-300">
               This will remove all participating schools, match queues, and scores. This cannot be undone.
             </p>
+              <button
+                type="button"
+                onClick={() => downloadTournamentBackup(state, 'Before_Clear_All')}
+                className="w-full py-2 bg-cyan-950/60 hover:bg-cyan-900 text-cyan-300 border border-cyan-800/60 text-xs font-bold rounded-lg flex items-center justify-center gap-2"
+              >
+                <Download className="w-3.5 h-3.5" />
+                <span>Download a backup first (recommended)</span>
+              </button>
             <div className="flex items-center justify-end space-x-2 pt-2">
               <button
                 onClick={() => setIsConfirmClearAll(false)}
