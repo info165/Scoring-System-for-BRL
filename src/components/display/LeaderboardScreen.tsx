@@ -39,7 +39,7 @@ export const LeaderboardScreen: React.FC = () => {
   const roundMeta = filter !== 'all' ? ROUND_META[filter] : null;
 
   return (
-    <div className="min-h-screen bg-slate-950 text-white flex flex-col justify-between p-6 sm:p-10 relative overflow-hidden font-sans select-none">
+    <div className="min-h-screen bg-slate-950 text-white flex flex-col justify-between p-6 sm:p-10 relative overflow-x-clip font-sans select-none">
       {/* Background ambient lighting */}
       <div className="absolute top-0 right-1/4 w-[700px] h-[500px] bg-amber-500/10 rounded-full blur-[170px] pointer-events-none"></div>
       <div className="absolute bottom-0 left-1/4 w-[700px] h-[500px] bg-blue-500/10 rounded-full blur-[170px] pointer-events-none"></div>
@@ -74,10 +74,10 @@ export const LeaderboardScreen: React.FC = () => {
 
       {/* Main Leaderboard Table Stage View */}
       <main className="relative z-10 my-auto py-4 max-w-7xl mx-auto w-full">
-        <div className="bg-slate-900/80 border border-slate-800 rounded-3xl overflow-hidden shadow-2xl backdrop-blur-md">
-          <div className="overflow-x-auto">
+        <div className="bg-slate-900/80 border border-slate-800 rounded-3xl overflow-clip shadow-2xl backdrop-blur-md">
+          <div className="overflow-x-clip">
             <table className="w-full text-left">
-              <thead className="bg-slate-950 border-b border-slate-800 text-slate-400 font-display font-bold text-xs uppercase tracking-wider">
+              <thead className="sticky top-0 z-20 bg-slate-950 border-b border-slate-800 text-slate-400 font-display font-bold text-xs uppercase tracking-wider">
                 <tr>
                   <th className="py-4 px-6 text-center w-24">RANK</th>
                   <th className="py-4 px-6">PARTICIPATING SCHOOL / TEAM</th>
@@ -102,7 +102,7 @@ export const LeaderboardScreen: React.FC = () => {
                     </td>
                   </tr>
                 ) : (
-                  displayRows.slice(0, 10).map((entry) => {
+                  displayRows.map((entry) => {
                     const isGold = entry.rank === 1;
                     const isSilver = entry.rank === 2;
                     const isBronze = entry.rank === 3;
@@ -218,7 +218,7 @@ export const LeaderboardScreen: React.FC = () => {
 
       {/* Footer */}
       <footer className="relative z-10 border-t border-slate-800/80 pt-4 flex items-center justify-between text-xs font-mono text-slate-400">
-        <div>BHARAT ROBOTICS LEAGUE 2026 • OFFICIAL LEADERBOARD SYSTEM</div>
+        <div>BHARAT ROBOTICS LEAGUE 2026 • OFFICIAL LEADERBOARD SYSTEM • {displayRows.length} TEAMS</div>
         <div>STRICT TOTAL SCORE RANKING • NO ASSUMED TIE-BREAKS</div>
       </footer>
     </div>
