@@ -1,6 +1,9 @@
 import React from 'react';
 import { Swords, Flame, Trophy, ShieldAlert, Zap } from 'lucide-react';
 import { useCompetition } from '../../context/CompetitionContext';
+import { useArenaTimer } from '../../hooks/useArenaTimer';
+import { formatBrlTimer } from '../../utils/arenaAudio';
+import { ArenaClock, ArenaClockStatus } from './ArenaClock';
 
 export const RobotWarScreen: React.FC = () => {
   const { state, activeRobotWarMatch } = useCompetition();
@@ -12,6 +15,22 @@ export const RobotWarScreen: React.FC = () => {
   const isTeamAWinner = activeRobotWarMatch?.result === 'team_a_win';
   const isTeamBWinner = activeRobotWarMatch?.result === 'team_b_win';
   const isDraw = activeRobotWarMatch?.result === 'draw';
+
+  // The 90 second fight clock. It only counts for the match it was started for; a completed match
+  // shows the time that was left when the bout ended.
+  const timer = useArenaTimer(3);
+  const clockBelongsHere =
+    !!activeRobotWarMatch && state.arenaTimer?.round === 3 && state.arenaTimer?.matchId === activeRobotWarMatch.id;
+  let clockStatus: ArenaClockStatus = 'idle';
+  let clockSeconds = 90;
+  if (clockBelongsHere) {
+    clockStatus = timer.status;
+    clockSeconds = timer.remainingSeconds;
+  } else if (isCompleted && activeRobotWarMatch) {
+    clockStatus = 'stopped';
+    clockSeconds = Math.min(90, Math.max(0, activeRobotWarMatch.timeLeftSeconds || 0));
+  }
+  const clockUrgent = clockBelongsHere && timer.isUrgent;
 
   return (
     <div className="min-h-screen bg-slate-950 text-white flex flex-col justify-between p-6 sm:p-10 relative overflow-hidden font-sans select-none">
@@ -46,7 +65,7 @@ export const RobotWarScreen: React.FC = () => {
       </header>
 
       {/* Main Face-Off Arena Screen */}
-      <main className="relative z-10 my-auto py-6 max-w-7xl mx-auto w-full">
+      <main className="relative z-10 my-auto py-6 max-w-[1700px] mx-auto w-full">
         {activeRobotWarMatch && teamASchool && teamBSchool ? (
           <div className="space-y-6">
             
@@ -60,17 +79,23 @@ export const RobotWarScreen: React.FC = () => {
               ) : (
                 <div className="inline-flex items-center space-x-2 px-5 py-2 rounded-full bg-amber-500/20 border border-amber-500/50 text-amber-300 font-display font-bold text-sm tracking-wider uppercase">
                   <Flame className="w-4 h-4 text-amber-400 animate-pulse" />
-                  <span>ARENA COMBAT IN PROGRESS</span>
+                  <span>
+                    {clockStatus === 'running'
+                      ? 'ARENA COMBAT IN PROGRESS'
+                      : clockStatus === 'idle'
+                        ? 'COMBATANTS READY • AWAITING START'
+                        : 'BOUT ENDED • AWAITING OFFICIAL RESULT'}
+                  </span>
                 </div>
               )}
             </div>
 
             {/* Split Arena Card */}
-            <div className="grid grid-cols-1 lg:grid-cols-11 gap-4 items-stretch">
+            <div className="grid grid-cols-1 lg:grid-cols-11 gap-6 items-stretch">
               
               {/* Team A Corner (Cyan) */}
               <div 
-                className={`lg:col-span-5 p-8 rounded-3xl border-2 transition-all duration-500 flex flex-col justify-between ${
+                className={`lg:col-span-4 p-8 rounded-3xl border-2 transition-all duration-500 flex flex-col justify-between ${
                   isTeamAWinner
                     ? 'bg-gradient-to-b from-cyan-950/80 via-slate-900 to-cyan-950/90 border-cyan-400 shadow-2xl shadow-cyan-950/80 scale-[1.02]'
                     : 'bg-slate-900/80 border-slate-800'
@@ -110,13 +135,20 @@ export const RobotWarScreen: React.FC = () => {
                 </div>
               </div>
 
-              {/* Center VS Nexus */}
-              <div className="lg:col-span-1 flex flex-col items-center justify-center my-4 lg:my-0">
-                <div className="w-16 h-16 rounded-full bg-slate-900 border-2 border-rose-500/60 flex items-center justify-center text-rose-400 font-display font-black text-xl shadow-2xl shadow-rose-950/60">
+              {/* Centre: VS + the 90 second fight clock */}
+              <div className="lg:col-span-3 flex flex-col items-center justify-center gap-5 my-4 lg:my-0">
+                <div className="w-14 h-14 rounded-full bg-slate-900 border-2 border-rose-500/60 flex items-center justify-center text-rose-400 font-display font-black text-lg shadow-2xl shadow-rose-950/60">
                   VS
                 </div>
+                <ArenaClock
+                  remaining={clockSeconds}
+                  total={90}
+                  status={clockStatus}
+                  urgent={clockUrgent}
+                  formatted={formatBrlTimer(clockSeconds)}
+                />
                 {activeRobotWarMatch.winType && isCompleted && (
-                  <span className="text-[11px] font-mono font-bold text-slate-400 mt-3 text-center uppercase tracking-wider">
+                  <span className="text-[11px] font-mono font-bold text-slate-400 text-center uppercase tracking-wider">
                     {activeRobotWarMatch.winType.replace('_', ' ')}
                   </span>
                 )}
@@ -124,7 +156,7 @@ export const RobotWarScreen: React.FC = () => {
 
               {/* Team B Corner (Rose) */}
               <div 
-                className={`lg:col-span-5 p-8 rounded-3xl border-2 transition-all duration-500 flex flex-col justify-between ${
+                className={`lg:col-span-4 p-8 rounded-3xl border-2 transition-all duration-500 flex flex-col justify-between ${
                   isTeamBWinner
                     ? 'bg-gradient-to-b from-rose-950/80 via-slate-900 to-rose-950/90 border-rose-400 shadow-2xl shadow-rose-950/80 scale-[1.02]'
                     : 'bg-slate-900/80 border-slate-800'

@@ -128,9 +128,9 @@ interface CompetitionContextType {
 
   // Live Arena Timer Synchronization
   arenaTimer: ArenaTimerState;
-  startArenaTimer: (round?: 1 | 2 | 3, schoolId?: string, duration?: number) => void;
+  startArenaTimer: (round?: 1 | 2 | 3, schoolId?: string, duration?: number, matchId?: string) => void;
   stopArenaTimer: (explicitTimeLeft?: number) => void;
-  resetArenaTimer: (duration?: number) => void;
+  resetArenaTimer: (duration?: number, round?: 1 | 2 | 3, matchId?: string) => void;
 
   // Authoritative Active Run Controls (synced across controller, evaluator, and display)
   startActiveRun: (schoolId?: string, round?: 1 | 2 | 3, user?: AppUser) => void;
@@ -1551,7 +1551,7 @@ export const CompetitionProvider: React.FC<{ children: React.ReactNode }> = ({ c
   }, [historyStack, commitState, invalidateUndo, showUndoNotice]);
 
   // Arena Timer Synchronization Callbacks
-  const startArenaTimer = useCallback((round: 1 | 2 | 3 = state.currentRound, schoolId?: string, duration: number = 120) => {
+  const startArenaTimer = useCallback((round: 1 | 2 | 3 = state.currentRound, schoolId?: string, duration: number = 120, matchId?: string) => {
     const startTimestamp = Date.now();
     const newTimer: ArenaTimerState = {
       status: 'running',
@@ -1560,7 +1560,8 @@ export const CompetitionProvider: React.FC<{ children: React.ReactNode }> = ({ c
       startTimestamp,
       stopTimestamp: null,
       round,
-      schoolId: schoolId || currentSchool?.id || null
+      schoolId: schoolId || currentSchool?.id || null,
+      matchId: matchId ?? null
     };
     commitState({
       ...state,
@@ -1593,15 +1594,16 @@ export const CompetitionProvider: React.FC<{ children: React.ReactNode }> = ({ c
     }, false);
   }, [state, commitState]);
 
-  const resetArenaTimer = useCallback((duration: number = 120) => {
+  const resetArenaTimer = useCallback((duration: number = 120, round?: 1 | 2 | 3, matchId?: string) => {
     const newTimer: ArenaTimerState = {
       status: 'idle',
       totalDurationSeconds: duration,
       remainingSeconds: duration,
       startTimestamp: null,
       stopTimestamp: null,
-      round: state.currentRound,
-      schoolId: currentSchool?.id || null
+      round: round ?? state.currentRound,
+      schoolId: currentSchool?.id || null,
+      matchId: matchId ?? null
     };
     commitState({
       ...state,

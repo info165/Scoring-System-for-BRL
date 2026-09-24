@@ -201,6 +201,8 @@ export interface ArenaTimerState {
   stopTimestamp: number | null; // epoch ms
   round: 1 | 2 | 3;
   schoolId: string | null;
+  // Round 3 only: the Robot War match this clock belongs to.
+  matchId?: string | null;
 }
 
 export interface CompetitionState {

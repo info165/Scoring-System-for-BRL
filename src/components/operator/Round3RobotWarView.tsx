@@ -12,9 +12,14 @@ import {
   Tv,
   Info,
   Check,
-  Trash2
+  Trash2,
+  Play,
+  Square,
+  RotateCcw
 } from 'lucide-react';
 import { useCompetition } from '../../context/CompetitionContext';
+import { useArenaTimer } from '../../hooks/useArenaTimer';
+import { formatBrlTimer } from '../../utils/arenaAudio';
 import { ROBO_WAR_CONFIG, calculateRoboWarScore } from '../../data/officialRules';
 import { PitType } from '../../types';
 
@@ -51,15 +56,47 @@ export const Round3RobotWarView: React.FC = () => {
     activeRobotWarMatch?.pitType || 'in_pit'
   );
 
-  const [timeLeftSeconds, setTimeLeftSeconds] = useState<number>(
+  // Time left as saved for the match, or typed in by hand. While a fight clock is running or has just
+  // been stopped, the clock's own value is used instead (see timeLeftSeconds below).
+  const [storedTimeLeft, setStoredTimeLeft] = useState<number>(
     activeRobotWarMatch?.timeLeftSeconds ?? 30
   );
+  const [manualTime, setManualTime] = useState<boolean>(false);
+  const setManualTimeLeft = (sec: number) => {
+    setManualTime(true);
+    setStoredTimeLeft(sec);
+  };
+
+  // 90 second fight clock (shared with the HDMI battle screen). It only counts for the match it was
+  // started for.
+  const {
+    remainingSeconds,
+    status: rawTimerStatus,
+    isUrgent,
+    start: startTimer,
+    stop: stopTimer,
+    reset: resetTimer
+  } = useArenaTimer(3);
+  const ownsTimer = !!activeRobotWarMatch && state.arenaTimer?.matchId === activeRobotWarMatch.id;
+  const timerStatus = ownsTimer ? rawTimerStatus : 'idle';
+  const isTimerRunning = timerStatus === 'running';
+  const timerFinished = timerStatus === 'stopped' || timerStatus === 'time_over';
+  const clockSeconds = ownsTimer ? remainingSeconds : 90;
+  const frozenSeconds = timerStatus === 'time_over' ? 0 : remainingSeconds;
+  // Running: seconds left right now. Stopped: the frozen seconds, unless typed in by hand.
+  const timeLeftSeconds = isTimerRunning
+    ? remainingSeconds
+    : (timerFinished && !manualTime ? frozenSeconds : storedTimeLeft);
 
   const [matchNotes, setMatchNotes] = useState<string>(activeRobotWarMatch?.matchNotes || '');
   const [isPreviewModalOpen, setIsPreviewModalOpen] = useState<boolean>(false);
   const [feedbackMsg, setFeedbackMsg] = useState<{ text: string; type: 'success' | 'info' | 'error' } | null>(null);
 
-  // Sync when active match changes
+  // Sync when the saved data of the active match changes. Keyed on the data itself, so an unrelated
+  // save (the clock starting, another operator) cannot wipe what is being entered.
+  const savedMatchKey = activeRobotWarMatch
+    ? JSON.stringify([activeRobotWarMatch.id, activeRobotWarMatch.result, activeRobotWarMatch.pitType ?? null, activeRobotWarMatch.timeLeftSeconds, activeRobotWarMatch.matchNotes ?? ''])
+    : 'none';
   React.useEffect(() => {
     if (activeRobotWarMatch) {
       if (activeRobotWarMatch.result === 'team_a_win') setSelectedWinner('team_a');
@@ -68,10 +105,31 @@ export const Round3RobotWarView: React.FC = () => {
       else setSelectedWinner(null);
 
       setPitType(activeRobotWarMatch.pitType || 'in_pit');
-      setTimeLeftSeconds(activeRobotWarMatch.timeLeftSeconds ?? 30);
+      setStoredTimeLeft(activeRobotWarMatch.timeLeftSeconds ?? 30);
+      // A match that already has a saved result shows that saved time, not the clock.
+      setManualTime(activeRobotWarMatch.result !== 'pending');
       setMatchNotes(activeRobotWarMatch.matchNotes || '');
     }
-  }, [activeRobotWarMatch]);
+  }, [savedMatchKey]);
+
+  const handleStartTimer = () => {
+    if (!activeRobotWarMatch) return;
+    setSelectedWinner(null);
+    setPitType('in_pit');
+    setManualTime(false);
+    setStoredTimeLeft(0);
+    startTimer(90, 3, undefined, activeRobotWarMatch.id);
+    setDisplayState('robot_war');
+  };
+  const handleStopTimer = () => {
+    stopTimer();
+  };
+  const handleRestartTimer = () => {
+    resetTimer(90, activeRobotWarMatch?.id);
+    setSelectedWinner(null);
+    setManualTime(false);
+    setStoredTimeLeft(0);
+  };
 
   const teamASchool = state.schools.find(s => s.id === activeRobotWarMatch?.teamAId);
   const teamBSchool = state.schools.find(s => s.id === activeRobotWarMatch?.teamBId);
@@ -475,6 +533,67 @@ export const Round3RobotWarView: React.FC = () => {
             </div>
             )}
 
+            {/* Fight clock: Start / Stop the 90 second fight (also drives the HDMI battle screen clock) */}
+            <div className="bg-slate-900/90 border border-slate-800 rounded-2xl p-5 space-y-3">
+              <div className="flex items-center justify-between border-b border-slate-800 pb-2.5">
+                <div className="flex items-center space-x-2">
+                  <Clock className="w-4 h-4 text-red-400" />
+                  <h3 className="font-display font-bold text-white text-sm">Fight Clock (90 seconds)</h3>
+                </div>
+                <span className="text-[11px] font-mono font-bold text-slate-400">
+                  {isTimerRunning ? 'FIGHT IN PROGRESS' : timerFinished ? 'CLOCK STOPPED' : 'READY TO START'}
+                </span>
+              </div>
+
+              <div className="flex items-center justify-between gap-4">
+                <div>
+                  <div className={`text-5xl font-mono font-black tracking-tight ${
+                    isTimerRunning && isUrgent ? 'text-red-500' : isTimerRunning ? 'text-amber-400' : 'text-slate-100'
+                  }`}>
+                    {formatBrlTimer(clockSeconds)}
+                  </div>
+                  <div className="text-xs font-mono text-slate-400 mt-1">
+                    Time Left: {clockSeconds}s • press STOP the moment the fight ends
+                  </div>
+                </div>
+
+                <div className="flex-1 max-w-xs space-y-2">
+                  {isTimerRunning ? (
+                    <button
+                      type="button"
+                      onClick={handleStopTimer}
+                      className="w-full py-3 bg-red-600 hover:bg-red-500 text-white font-display font-black text-lg rounded-xl border-2 border-red-400 flex items-center justify-center gap-2 transition"
+                    >
+                      <Square className="w-5 h-5 fill-white" />
+                      <span>STOP FIGHT</span>
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={handleStartTimer}
+                      disabled={!activeRobotWarMatch || timerFinished}
+                      className={`w-full py-3 font-display font-black text-lg rounded-xl flex items-center justify-center gap-2 transition ${
+                        timerFinished || !activeRobotWarMatch
+                          ? 'bg-slate-800 text-slate-500 border border-slate-700 cursor-not-allowed'
+                          : 'bg-emerald-600 hover:bg-emerald-500 text-white border-2 border-emerald-400'
+                      }`}
+                    >
+                      <Play className="w-5 h-5 fill-white" />
+                      <span>{timerFinished ? 'CLOCK STOPPED' : 'START 90s FIGHT'}</span>
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    onClick={handleRestartTimer}
+                    className="w-full text-xs font-mono font-bold text-rose-400 hover:text-rose-300 flex items-center justify-center gap-1.5"
+                  >
+                    <RotateCcw className="w-3.5 h-3.5" />
+                    <span>RESTART FIGHT</span>
+                  </button>
+                </div>
+              </div>
+            </div>
+
             {/* Time Left Slider (0 to 90s) */}
             <div className="bg-slate-900/90 border border-slate-800 rounded-2xl p-5 space-y-4">
               <div className="flex items-center justify-between border-b border-slate-800 pb-3">
@@ -508,8 +627,9 @@ export const Round3RobotWarView: React.FC = () => {
                   max="90"
                   step="1"
                   value={timeLeftSeconds}
-                  onChange={(e) => setTimeLeftSeconds(Number(e.target.value))}
-                  className="w-full accent-red-500 h-2 bg-slate-950 rounded-lg cursor-pointer"
+                  onChange={(e) => setManualTimeLeft(Number(e.target.value))}
+                  disabled={isTimerRunning}
+                  className="w-full accent-red-500 h-2 bg-slate-950 rounded-lg cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
                 />
 
                 <div className="flex flex-wrap gap-1.5 mt-3">
@@ -525,7 +645,8 @@ export const Round3RobotWarView: React.FC = () => {
                     <button
                       key={item.val}
                       type="button"
-                      onClick={() => setTimeLeftSeconds(item.val)}
+                      onClick={() => setManualTimeLeft(item.val)}
+                      disabled={isTimerRunning}
                       className={`px-3 py-1.5 rounded-lg text-xs font-mono font-semibold transition border ${
                         timeLeftSeconds === item.val
                           ? 'bg-red-600 text-white border-red-500'
@@ -622,7 +743,7 @@ export const Round3RobotWarView: React.FC = () => {
                 <button
                   type="button"
                   onClick={() => setIsPreviewModalOpen(true)}
-                  disabled={!isFormValid}
+                  disabled={!isFormValid || isTimerRunning}
                   className="w-full py-3.5 px-4 bg-red-600 hover:bg-red-500 text-white font-display font-bold text-sm rounded-xl transition shadow-lg shadow-red-600/30 flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
                 >
                   <Send className="w-4 h-4" />
@@ -632,7 +753,7 @@ export const Round3RobotWarView: React.FC = () => {
                 <button
                   type="button"
                   onClick={handleSaveDraft}
-                  disabled={!selectedWinner}
+                  disabled={!selectedWinner || isTimerRunning}
                   className="w-full py-2.5 px-4 bg-slate-800 hover:bg-slate-700 text-slate-300 font-medium text-xs rounded-xl transition flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
                 >
                   <Save className="w-3.5 h-3.5" />

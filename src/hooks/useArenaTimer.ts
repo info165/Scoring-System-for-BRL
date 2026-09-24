@@ -14,9 +14,9 @@ export interface ArenaTimerHookReturn {
   status: 'idle' | 'running' | 'stopped' | 'time_over';
   isUrgent: boolean; // <= 10s and running
   isTimeOver: boolean;
-  start: (duration?: number, round?: 1 | 2 | 3, schoolId?: string) => void;
+  start: (duration?: number, round?: 1 | 2 | 3, schoolId?: string, matchId?: string) => void;
   stop: () => void;
-  reset: (duration?: number) => void;
+  reset: (duration?: number, matchId?: string) => void;
   elapsedSeconds: number;
 }
 
@@ -32,14 +32,18 @@ export function useArenaTimer(round?: 1 | 2 | 3): ArenaTimerHookReturn {
     currentSchool
   } = useCompetition();
 
+  // A Robot War fight lasts 90 seconds; Rounds 1 and 2 last 120.
+  const defaultTotal = round === 3 ? 90 : 120;
+
   const idleTimer = {
     status: 'idle' as const,
-    totalDurationSeconds: 120,
-    remainingSeconds: 120,
+    totalDurationSeconds: defaultTotal,
+    remainingSeconds: defaultTotal,
     startTimestamp: null,
     stopTimestamp: null,
     round: round ?? 1,
-    schoolId: currentSchool?.id || null
+    schoolId: currentSchool?.id || null,
+    matchId: null as string | null
   };
   const storedTimer = state.arenaTimer || idleTimer;
   const arenaTimer = round !== undefined && storedTimer.round !== round ? idleTimer : storedTimer;
@@ -54,16 +58,16 @@ export function useArenaTimer(round?: 1 | 2 | 3): ArenaTimerHookReturn {
       return Math.max(0, state.activeRun.timeLeftSeconds);
     }
     if (arenaTimer.status === 'idle') {
-      return arenaTimer.totalDurationSeconds || 120;
+      return arenaTimer.totalDurationSeconds || defaultTotal;
     }
     if (arenaTimer.status === 'stopped' || arenaTimer.status === 'time_over') {
       return Math.max(0, arenaTimer.remainingSeconds || 0);
     }
     if (arenaTimer.status === 'running' && arenaTimer.startTimestamp) {
       const elapsed = Math.floor((Date.now() - arenaTimer.startTimestamp) / 1000);
-      return Math.max(0, (arenaTimer.totalDurationSeconds || 120) - elapsed);
+      return Math.max(0, (arenaTimer.totalDurationSeconds || defaultTotal) - elapsed);
     }
-    return 120;
+    return defaultTotal;
   };
 
   const [remainingSeconds, setRemainingSeconds] = useState<number>(calculateRemaining);
@@ -106,12 +110,12 @@ export function useArenaTimer(round?: 1 | 2 | 3): ArenaTimerHookReturn {
     return () => clearInterval(interval);
   }, [arenaTimer.status, arenaTimer.startTimestamp, arenaTimer.totalDurationSeconds, stopArenaTimer]);
 
-  const handleStart = (duration: number = 120, round: 1 | 2 | 3 = 1, schoolId?: string) => {
+  const handleStart = (duration: number = defaultTotal, startRound: 1 | 2 | 3 = round ?? 1, schoolId?: string, matchId?: string) => {
     unlockAudioContext();
     playArenaStartSound();
     warnedRef.current = false;
     overRef.current = false;
-    startArenaTimer(round, schoolId || currentSchool?.id, duration);
+    startArenaTimer(startRound, schoolId || currentSchool?.id, duration, matchId);
   };
 
   const handleStop = () => {
@@ -120,14 +124,14 @@ export function useArenaTimer(round?: 1 | 2 | 3): ArenaTimerHookReturn {
     stopArenaTimer(currentSec);
   };
 
-  const handleReset = (duration: number = 120) => {
+  const handleReset = (duration: number = defaultTotal, matchId?: string) => {
     warnedRef.current = false;
     overRef.current = false;
     setRemainingSeconds(duration);
-    resetArenaTimer(duration);
+    resetArenaTimer(duration, round, matchId);
   };
 
-  const total = arenaTimer.totalDurationSeconds || 120;
+  const total = arenaTimer.totalDurationSeconds || defaultTotal;
   const isTimeOver = remainingSeconds === 0 || arenaTimer.status === 'time_over';
   const isUrgent = remainingSeconds <= 10 && remainingSeconds > 0 && arenaTimer.status === 'running';
 
