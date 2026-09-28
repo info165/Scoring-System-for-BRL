@@ -66,7 +66,7 @@ export const LeaderboardScreen: React.FC = () => {
           <span className={`px-3.5 py-1.5 rounded-full font-bold uppercase border ${
             roundMeta ? roundMeta.badgeClass : 'bg-amber-500/20 text-amber-300 border-amber-500/40'
           }`}>
-            {roundMeta ? `SHOWING: ${roundMeta.label} ONLY` : `STAGE: ROUND ${state.currentRound}`}
+            {roundMeta ? `SHOWING: ${roundMeta.label} ONLY` : 'SHOWING: ALL ROUNDS COMBINED'}
           </span>
           <span className="text-slate-400">29 SEPT 2026</span>
         </div>
