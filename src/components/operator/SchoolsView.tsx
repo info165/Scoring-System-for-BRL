@@ -10,7 +10,6 @@ import {
   Users, 
   Database,
   Building,
-  MapPin,
   Download
 } from 'lucide-react';
 import { useCompetition } from '../../context/CompetitionContext';
@@ -223,7 +222,6 @@ export const SchoolsView: React.FC = () => {
                 <th className="py-3 px-4">Team ID</th>
                 <th className="py-3 px-4">School Name</th>
                 <th className="py-3 px-4">Robotics Team</th>
-                <th className="py-3 px-4">City / Region</th>
                 <th className="py-3 px-4">Student Members</th>
                 <th className="py-3 px-4 text-center">Status</th>
                 <th className="py-3 px-4 text-center">Rounds Played</th>
@@ -233,7 +231,7 @@ export const SchoolsView: React.FC = () => {
             <tbody className="divide-y divide-slate-800 text-slate-300">
               {filteredSchools.length === 0 ? (
                 <tr>
-                  <td colSpan={8} className="py-8 text-center text-slate-400">
+                  <td colSpan={7} className="py-8 text-center text-slate-400">
                     No schools matching your search or filter.
                   </td>
                 </tr>
@@ -254,10 +252,6 @@ export const SchoolsView: React.FC = () => {
                       </td>
                       <td className="py-3 px-4 text-cyan-300 font-medium">
                         {school.teamName}
-                      </td>
-                      <td className="py-3 px-4 text-slate-400 flex items-center gap-1">
-                        <MapPin className="w-3 h-3 text-slate-400" />
-                        <span>{school.city}</span>
                       </td>
                       <td className="py-3 px-4 text-slate-400 max-w-xs truncate">
                         {school.students.length > 0 ? school.students.join(', ') : '—'}

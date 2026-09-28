@@ -16,7 +16,6 @@ export const ResultRevealScreen: React.FC = () => {
   const teamName = publishedResult?.teamName || fallbackSchool?.teamName || 'Team';
   const schoolName = publishedResult?.schoolName || fallbackSchool?.name || 'School';
   const teamNumber = publishedResult?.teamNumber || fallbackSchool?.teamNumber || '';
-  const city = publishedResult?.city || fallbackSchool?.city || '';
 
   const finalScore = publishedResult?.finalScore ?? (
     round === 1 ? (round1Score?.finalScore ?? 0) : round === 2 ? (round2Score?.finalScore ?? 0) : 0
@@ -113,7 +112,7 @@ export const ResultRevealScreen: React.FC = () => {
               </h2>
             </div>
             <div className="text-xl sm:text-2xl lg:text-3xl font-display font-bold text-slate-200 max-w-3xl mx-auto leading-snug">
-              {schoolName} {city ? `• ${city}` : ''}
+              {schoolName}
             </div>
             <div className="text-xs sm:text-sm font-mono text-slate-400 uppercase tracking-wider">
               Official Result for {roundTitle}

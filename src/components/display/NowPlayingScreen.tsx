@@ -112,7 +112,6 @@ export const NowPlayingScreen: React.FC = () => {
                   <span className="text-2xl font-bold text-amber-400">
                     {currentSchool.teamName}
                   </span>
-                  <span className="text-slate-400 font-medium text-sm">• {currentSchool.city}</span>
                 </div>
               </div>
 
@@ -238,9 +237,6 @@ export const NowPlayingScreen: React.FC = () => {
                 <div className="text-base text-amber-300 font-semibold">
                   {upNextSchool.teamName} ({upNextSchool.teamNumber})
                 </div>
-                <div className="text-xs text-slate-400">
-                  {upNextSchool.city}
-                </div>
               </div>
             ) : (
               <div className="text-xs text-slate-500 py-4">No team in queue slot</div>
@@ -260,9 +256,6 @@ export const NowPlayingScreen: React.FC = () => {
                 </div>
                 <div className="text-sm text-slate-300 font-medium">
                   {followingSchool.teamName} ({followingSchool.teamNumber})
-                </div>
-                <div className="text-xs text-slate-500">
-                  {followingSchool.city}
                 </div>
               </div>
             ) : (

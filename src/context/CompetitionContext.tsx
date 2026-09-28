@@ -264,7 +264,7 @@ const rebuildRound3Scores = (
     const r1 = current.round1 && !current.round1.isDraft ? current.round1.finalScore : 0;
     const r2 = current.round2 && !current.round2.isDraft ? current.round2.finalScore : 0;
     const r3 = round3PointsFor(schoolId, matches);
-    updated[schoolId] = { ...current, round3Score: r3, totalScore: r1 + r2 + r3 };
+    updated[schoolId] = { ...current, round3Score: roundToTwoDecimals(r3), totalScore: roundToTwoDecimals(r1 + r2 + r3) };
   });
   return updated;
 };
@@ -935,7 +935,7 @@ export const CompetitionProvider: React.FC<{ children: React.ReactNode }> = ({ c
 
     const r2 = (existing?.round2 && !existing.round2.isDraft) ? existing.round2.finalScore : 0;
     const r3 = existing?.round3Score || 0;
-    const newTotal = publishedScore.finalScore + r2 + r3;
+    const newTotal = roundToTwoDecimals(publishedScore.finalScore + r2 + r3);
 
     const log: AuditLogEntry = {
       id: `log_${Date.now()}`,
@@ -1101,7 +1101,7 @@ export const CompetitionProvider: React.FC<{ children: React.ReactNode }> = ({ c
 
     const r1 = (existing?.round1 && !existing.round1.isDraft) ? existing.round1.finalScore : 0;
     const r3 = existing?.round3Score || 0;
-    const newTotal = r1 + publishedScore.finalScore + r3;
+    const newTotal = roundToTwoDecimals(r1 + publishedScore.finalScore + r3);
 
     const log: AuditLogEntry = {
       id: `log_${Date.now()}`,
@@ -1493,7 +1493,7 @@ export const CompetitionProvider: React.FC<{ children: React.ReactNode }> = ({ c
           publishedAt: new Date().toISOString(),
           notes: `[Manual Correction] ${reason}`
         },
-        totalScore: newScore + (existing.round2?.finalScore || 0) + existing.round3Score
+        totalScore: roundToTwoDecimals(newScore + (existing.round2?.finalScore || 0) + existing.round3Score)
       };
     } else if (round === 2) {
       oldScore = existing.round2?.finalScore || 0;
@@ -1513,14 +1513,14 @@ export const CompetitionProvider: React.FC<{ children: React.ReactNode }> = ({ c
           publishedAt: new Date().toISOString(),
           notes: `[Manual Correction] ${reason}`
         },
-        totalScore: (existing.round1?.finalScore || 0) + newScore + existing.round3Score
+        totalScore: roundToTwoDecimals((existing.round1?.finalScore || 0) + newScore + existing.round3Score)
       };
     } else if (round === 3) {
       oldScore = existing.round3Score || 0;
       updatedScores[schoolId] = {
         ...existing,
         round3Score: newScore,
-        totalScore: (existing.round1?.finalScore || 0) + (existing.round2?.finalScore || 0) + newScore
+        totalScore: roundToTwoDecimals((existing.round1?.finalScore || 0) + (existing.round2?.finalScore || 0) + newScore)
       };
     }
 
@@ -1956,13 +1956,13 @@ export const CompetitionProvider: React.FC<{ children: React.ReactNode }> = ({ c
         updatedScores[targetSchoolId] = {
           ...existing,
           round1: null,
-          totalScore: (existing.round2?.finalScore || 0) + existing.round3Score
+          totalScore: roundToTwoDecimals((existing.round2?.finalScore || 0) + existing.round3Score)
         };
       } else if (round === 2 && existing.round2?.isDraft) {
         updatedScores[targetSchoolId] = {
           ...existing,
           round2: null,
-          totalScore: (existing.round1?.finalScore || 0) + existing.round3Score
+          totalScore: roundToTwoDecimals((existing.round1?.finalScore || 0) + existing.round3Score)
         };
       }
     }

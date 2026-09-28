@@ -98,7 +98,7 @@ export const WinnerScreen: React.FC<WinnerScreenProps> = ({ onClose }) => {
                   {runnerUp1.school.teamName}
                 </div>
                 <div className="text-xs text-slate-400 mt-0.5">
-                  {runnerUp1.school.teamNumber} • {runnerUp1.school.city}
+                  {runnerUp1.school.teamNumber}
                 </div>
 
                 {runnerUp1.school.students.length > 0 && (
@@ -141,7 +141,7 @@ export const WinnerScreen: React.FC<WinnerScreenProps> = ({ onClose }) => {
                   {champion.school.teamName}
                 </div>
                 <div className="text-xs text-slate-300 mt-0.5">
-                  {champion.school.teamNumber} • {champion.school.city}
+                  {champion.school.teamNumber}
                 </div>
 
                 {champion.school.students.length > 0 && (
@@ -181,7 +181,7 @@ export const WinnerScreen: React.FC<WinnerScreenProps> = ({ onClose }) => {
                   {runnerUp2.school.teamName}
                 </div>
                 <div className="text-xs text-slate-400 mt-0.5">
-                  {runnerUp2.school.teamNumber} • {runnerUp2.school.city}
+                  {runnerUp2.school.teamNumber}
                 </div>
 
                 {runnerUp2.school.students.length > 0 && (

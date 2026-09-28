@@ -81,7 +81,6 @@ export const LeaderboardScreen: React.FC = () => {
                 <tr>
                   <th className="py-4 px-6 text-center w-24">RANK</th>
                   <th className="py-4 px-6">PARTICIPATING SCHOOL / TEAM</th>
-                  <th className="py-4 px-6">CITY</th>
                   {filter === 'all' ? (
                     <>
                       <th className="py-4 px-6 text-center text-blue-400">R1: ROBO PUSH</th>
@@ -97,7 +96,7 @@ export const LeaderboardScreen: React.FC = () => {
               <tbody className="divide-y divide-slate-800 text-slate-200 text-sm">
                 {displayRows.length === 0 ? (
                   <tr>
-                    <td colSpan={filter === 'all' ? 7 : 4} className="py-12 text-center text-slate-500">
+                    <td colSpan={filter === 'all' ? 6 : 3} className="py-12 text-center text-slate-500">
                       Awaiting initial score publication...
                     </td>
                   </tr>
@@ -163,11 +162,6 @@ export const LeaderboardScreen: React.FC = () => {
                             <span>•</span>
                             <span>{entry.school.teamName}</span>
                           </div>
-                        </td>
-
-                        {/* City */}
-                        <td className="py-4 px-6 text-slate-400 text-xs">
-                          {entry.school.city}
                         </td>
 
                         {filter === 'all' ? (

@@ -127,7 +127,6 @@ export const RobotWarScreen: React.FC = () => {
                   <div className="text-xl font-bold text-cyan-400 mt-2">
                     {teamASchool.teamName}
                   </div>
-                  <div className="text-xs text-slate-400 mt-1">{teamASchool.city}</div>
                 </div>
 
                 <div className="mt-8 pt-4 border-t border-slate-800 flex items-center justify-between">
@@ -191,7 +190,6 @@ export const RobotWarScreen: React.FC = () => {
                   <div className="text-xl font-bold text-rose-400 mt-2">
                     {teamBSchool.teamName}
                   </div>
-                  <div className="text-xs text-slate-400 mt-1">{teamBSchool.city}</div>
                 </div>
 
                 <div className="mt-8 pt-4 border-t border-slate-800 flex items-center justify-between">

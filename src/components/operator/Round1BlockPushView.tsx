@@ -27,7 +27,8 @@ import { useArenaTimer } from '../../hooks/useArenaTimer';
 import { 
   OFFICIAL_BLOCK_WEIGHTS, 
   BLOCK_PUSH_CONFIG, 
-  calculateBlockPushScore 
+  calculateBlockPushScore,
+  roundToTwoDecimals
 } from '../../data/officialRules';
 import { PushBlockStatus } from '../../types';
 
@@ -201,7 +202,7 @@ export const Round1BlockPushView: React.FC = () => {
     blockScore: calculatedBlockScore,
     timeLeftSeconds: effectiveTimeLeft,
     timeBonus: timeBonusEarned,
-    finalScore: calculatedBlockScore + timeBonusEarned
+    finalScore: roundToTwoDecimals(calculatedBlockScore + timeBonusEarned)
   };
 
   // Fullscreen toggle
@@ -250,7 +251,7 @@ export const Round1BlockPushView: React.FC = () => {
         blockScore: blockPts,
         timeLeftSeconds: effectiveTimeLeft,
         timeBonus: timeBonusEarned,
-        finalScore: blockPts + timeBonusEarned,
+        finalScore: roundToTwoDecimals(blockPts + timeBonusEarned),
         isDraft: true,
         notes: operatorNotes
       });
@@ -279,8 +280,8 @@ export const Round1BlockPushView: React.FC = () => {
         ...scoreCalculation,
         timeLeftSeconds: frozen,
         timeBonus: frozen,
-        finalScore: calculatedBlockScore + frozen,
-        calculatedScore: calculatedBlockScore + frozen,
+        finalScore: roundToTwoDecimals(calculatedBlockScore + frozen),
+        calculatedScore: roundToTwoDecimals(calculatedBlockScore + frozen),
         isDraft: true,
         notes: operatorNotes
       });
@@ -733,7 +734,7 @@ export const Round1BlockPushView: React.FC = () => {
                 </span>
                 <span className="text-[11px] text-slate-400">
                   {isRerunInProgress
-                    ? `Official score ${existingScore?.finalScore} stays on the leaderboard until you press UPDATE PUBLISHED SCORE`
+                    ? `Official score ${(existingScore?.finalScore ?? 0).toFixed(2)} stays on the leaderboard until you press UPDATE PUBLISHED SCORE`
                     : isPublished
                     ? 'Live on Arena Secondary Display & Leaderboard'
                     : (timerStatus === 'stopped' || isTimeOver)

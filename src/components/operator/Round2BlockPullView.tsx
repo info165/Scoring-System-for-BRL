@@ -30,6 +30,7 @@ export const Round2BlockPullView: React.FC = () => {
   const { 
     state, 
     currentSchool, 
+    setCurrentTeamManually,
     saveBlockPullDraft, 
     publishBlockPullScore, 
     advanceQueue,
@@ -74,9 +75,10 @@ export const Round2BlockPullView: React.FC = () => {
     setTimeLeftSeconds(sec);
   };
 
-  // Sync selected school with queue
+  // Keep the selected team in sync with the team now playing (the same one the HDMI screen shows),
+  // so Next Team, Live Control and this dropdown always agree.
   useEffect(() => {
-    if (!selectedSchoolId && currentSchool) {
+    if (currentSchool && selectedSchoolId !== currentSchool.id) {
       setSelectedSchoolId(currentSchool.id);
     } else if (!selectedSchoolId && state.schools.length > 0) {
       setSelectedSchoolId(state.schools[0].id);
@@ -256,7 +258,10 @@ export const Round2BlockPullView: React.FC = () => {
             <div className="flex flex-col sm:flex-row gap-3">
               <select
                 value={selectedSchoolId}
-                onChange={(e) => setSelectedSchoolId(e.target.value)}
+                onChange={(e) => {
+                  setSelectedSchoolId(e.target.value);
+                  setCurrentTeamManually(e.target.value);
+                }}
                 className="flex-1 bg-slate-950 border border-slate-700 rounded-xl px-4 py-2.5 text-white font-medium focus:outline-none focus:border-emerald-500 text-sm"
               >
                 {state.schools.map((school) => {
@@ -266,7 +271,7 @@ export const Round2BlockPullView: React.FC = () => {
                     <option key={school.id} value={school.id}>
                       {isCurrent ? '▶ [NOW PLAYING] ' : ''}
                       {school.name} ({school.teamNumber} - {school.teamName})
-                      {hasScored ? ` • Published: ${state.scores[school.id]?.round2?.finalScore} pts` : ''}
+                      {hasScored ? ` • Published: ${(state.scores[school.id]?.round2?.finalScore ?? 0).toFixed(2)} pts` : ''}
                     </option>
                   );
                 })}
@@ -298,11 +303,11 @@ export const Round2BlockPullView: React.FC = () => {
                   {isPublished ? (
                     <span className="px-2.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 font-semibold flex items-center gap-1">
                       <Check className="w-3 h-3 text-emerald-400" />
-                      Score Published ({existingScore?.finalScore} pts)
+                      Score Published ({(existingScore?.finalScore ?? 0).toFixed(2)} pts)
                     </span>
                   ) : existingScore?.isDraft ? (
                     <span className="px-2.5 py-0.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/40 font-semibold">
-                      Draft Saved ({existingScore.finalScore} pts)
+                      Draft Saved ({(existingScore.finalScore ?? 0).toFixed(2)} pts)
                     </span>
                   ) : (
                     <span className="px-2.5 py-0.5 rounded-full bg-slate-800 text-slate-400 border border-slate-700">
