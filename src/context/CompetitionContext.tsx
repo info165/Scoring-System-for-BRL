@@ -23,7 +23,8 @@ import {
   ROBO_WAR_CONFIG,
   calculateBlockPushScore,
   calculateBlockPullScore,
-  calculateRoboWarScore
+  calculateRoboWarScore,
+  roundToTwoDecimals
 } from '../data/officialRules';
 import { 
   initFirebaseAuth, 
@@ -167,7 +168,8 @@ export const DEFAULT_ACTIVE_RUN: ActiveRunState = {
   },
   operatorNotes: '',
   isLockedForReview: false,
-  manualTimeBonus: null
+  manualTimeBonus: null,
+  stoppedBy: null
 };
 
 export const DEFAULT_ARENA_TIMER: ArenaTimerState = {
@@ -768,10 +770,12 @@ export const CompetitionProvider: React.FC<{ children: React.ReactNode }> = ({ c
         : `Next Team advanced (${currentSchoolObj?.name || 'previous team'} skipped without a score, returned to end of queue): Now playing is ${nextSchoolObj?.name || 'End of Queue'}`
     };
 
+    const roundDuration = state.currentRound === 3 ? 90 : 120;
+
     const nextArenaTimer: ArenaTimerState = {
       status: 'idle',
-      totalDurationSeconds: 120,
-      remainingSeconds: 120,
+      totalDurationSeconds: roundDuration,
+      remainingSeconds: roundDuration,
       startTimestamp: null,
       stopTimestamp: null,
       round: state.currentRound,
@@ -782,8 +786,8 @@ export const CompetitionProvider: React.FC<{ children: React.ReactNode }> = ({ c
       status: 'READY',
       round: state.currentRound,
       schoolId: nextCurrent,
-      timeAllocated: 120,
-      timeLeftSeconds: 120,
+      timeAllocated: roundDuration,
+      timeLeftSeconds: roundDuration,
       timeBonus: 0,
       blockScore: 0,
       finalScore: 0,
@@ -800,7 +804,7 @@ export const CompetitionProvider: React.FC<{ children: React.ReactNode }> = ({ c
       operatorNotes: '',
       isLockedForReview: false,
       manualTimeBonus: null,
-      stoppedBy: undefined
+      stoppedBy: null
     };
 
     commitState({
@@ -1012,10 +1016,12 @@ export const CompetitionProvider: React.FC<{ children: React.ReactNode }> = ({ c
       };
     }
 
+    const resetDuration = round === 1 ? 120 : (state.currentRound === 3 ? 90 : 120);
+
     const resetTimer: ArenaTimerState = {
       status: 'idle',
-      totalDurationSeconds: 120,
-      remainingSeconds: 120,
+      totalDurationSeconds: resetDuration,
+      remainingSeconds: resetDuration,
       startTimestamp: null,
       stopTimestamp: null,
       round: state.currentRound,
@@ -1026,8 +1032,8 @@ export const CompetitionProvider: React.FC<{ children: React.ReactNode }> = ({ c
       status: 'READY',
       round: state.currentRound,
       schoolId,
-      timeAllocated: 120,
-      timeLeftSeconds: 120,
+      timeAllocated: resetDuration,
+      timeLeftSeconds: resetDuration,
       timeBonus: 0,
       blockScore: 0,
       finalScore: 0,
@@ -1044,7 +1050,7 @@ export const CompetitionProvider: React.FC<{ children: React.ReactNode }> = ({ c
       operatorNotes: '',
       isLockedForReview: false,
       manualTimeBonus: null,
-      stoppedBy: undefined
+      stoppedBy: null
     };
 
     commitState({
@@ -1136,10 +1142,23 @@ export const CompetitionProvider: React.FC<{ children: React.ReactNode }> = ({ c
       }
     };
 
+    const publishedRun: ActiveRunState = {
+      ...(state.activeRun || DEFAULT_ACTIVE_RUN),
+      round: 2,
+      schoolId,
+      status: 'PUBLISHED',
+      finalScore: publishedScore.finalScore,
+      blockScore: publishedScore.blockScore,
+      timeBonus: publishedScore.timeBonus,
+      timeLeftSeconds: publishedScore.timeLeftSeconds,
+      isLockedForReview: true
+    };
+
     commitState({
       ...state,
       displayState: 'result_reveal',
       lastPublishedResult: publishedResult,
+      activeRun: publishedRun,
       scores: {
         ...state.scores,
         [schoolId]: {
@@ -1617,14 +1636,16 @@ export const CompetitionProvider: React.FC<{ children: React.ReactNode }> = ({ c
   const stopArenaTimer = useCallback((explicitTimeLeft?: number) => {
     if (!state.arenaTimer) return;
     const now = Date.now();
+    const duration = state.arenaTimer.totalDurationSeconds || (state.arenaTimer.round === 3 ? 90 : 120);
     let frozen: number;
     if (typeof explicitTimeLeft === 'number') {
-      frozen = Math.max(0, Math.min(state.arenaTimer.totalDurationSeconds || 120, explicitTimeLeft));
+      frozen = Math.max(0, Math.min(duration, roundToTwoDecimals(explicitTimeLeft)));
     } else {
       const start = state.arenaTimer.startTimestamp || now;
-      const elapsed = Math.floor((now - start) / 1000);
-      frozen = Math.max(0, (state.arenaTimer.totalDurationSeconds || 120) - elapsed);
+      const elapsed = (now - start) / 1000;
+      frozen = Math.max(0, duration - elapsed);
     }
+    frozen = roundToTwoDecimals(frozen);
     const newTimer: ArenaTimerState = {
       ...state.arenaTimer,
       status: 'stopped',
@@ -1638,14 +1659,17 @@ export const CompetitionProvider: React.FC<{ children: React.ReactNode }> = ({ c
     }, false);
   }, [state, commitState]);
 
-  const resetArenaTimer = useCallback((duration: number = 120, round?: 1 | 2 | 3, matchId?: string) => {
+  const resetArenaTimer = useCallback((duration?: number, round?: 1 | 2 | 3, matchId?: string) => {
+    const targetRound = round ?? state.currentRound;
+    const defaultDuration = targetRound === 3 ? 90 : 120;
+    const finalDuration = duration ?? defaultDuration;
     const newTimer: ArenaTimerState = {
       status: 'idle',
-      totalDurationSeconds: duration,
-      remainingSeconds: duration,
+      totalDurationSeconds: finalDuration,
+      remainingSeconds: finalDuration,
       startTimestamp: null,
       stopTimestamp: null,
-      round: round ?? state.currentRound,
+      round: targetRound,
       schoolId: currentSchool?.id || null,
       matchId: matchId ?? null
     };
@@ -1662,13 +1686,14 @@ export const CompetitionProvider: React.FC<{ children: React.ReactNode }> = ({ c
     const targetSchoolId = schoolId || state.runQueue[roundKey]?.currentSchoolId || state.schools[0]?.id || null;
     const school = state.schools.find(s => s.id === targetSchoolId);
     const startTimestamp = Date.now();
+    const duration = round === 3 ? 90 : 120;
 
     const newActiveRun: ActiveRunState = {
       status: 'RUNNING',
       round,
       schoolId: targetSchoolId,
-      timeAllocated: 120,
-      timeLeftSeconds: 120,
+      timeAllocated: duration,
+      timeLeftSeconds: duration,
       timeBonus: 0,
       blockScore: 0,
       finalScore: 0,
@@ -1685,13 +1710,13 @@ export const CompetitionProvider: React.FC<{ children: React.ReactNode }> = ({ c
       operatorNotes: '',
       isLockedForReview: false,
       manualTimeBonus: null,
-      stoppedBy: undefined
+      stoppedBy: null
     };
 
     const newTimer: ArenaTimerState = {
       status: 'running',
-      totalDurationSeconds: 120,
-      remainingSeconds: 120,
+      totalDurationSeconds: duration,
+      remainingSeconds: duration,
       startTimestamp,
       stopTimestamp: null,
       round,
@@ -1704,7 +1729,7 @@ export const CompetitionProvider: React.FC<{ children: React.ReactNode }> = ({ c
       round,
       schoolName: school?.name || 'Current Team',
       teamName: school?.teamName || '',
-      action: `RUN STARTED (120s timer active)`,
+      action: `RUN STARTED (${duration.toFixed(2)}s timer active)`,
       userEmail: user?.email,
       userName: user?.displayName,
       userRole: user?.role
@@ -1787,19 +1812,21 @@ export const CompetitionProvider: React.FC<{ children: React.ReactNode }> = ({ c
   const stopActiveRun = useCallback((user?: AppUser, explicitTimeLeft?: number) => {
     const currentRun = state.activeRun || DEFAULT_ACTIVE_RUN;
     const now = Date.now();
+    const maxDuration = currentRun.round === 3 ? 90 : 120;
     let frozenSeconds: number;
 
     if (typeof explicitTimeLeft === 'number') {
-      frozenSeconds = Math.max(0, Math.min(120, explicitTimeLeft));
+      frozenSeconds = Math.max(0, Math.min(maxDuration, roundToTwoDecimals(explicitTimeLeft)));
     } else if (currentRun.startTimestamp) {
-      const elapsed = Math.floor((now - currentRun.startTimestamp) / 1000);
-      frozenSeconds = Math.max(0, 120 - elapsed);
+      const elapsed = (now - currentRun.startTimestamp) / 1000;
+      frozenSeconds = Math.max(0, maxDuration - elapsed);
     } else {
       frozenSeconds = currentRun.timeLeftSeconds || 0;
     }
+    frozenSeconds = roundToTwoDecimals(frozenSeconds);
 
     const bonus = frozenSeconds;
-    const totalScore = currentRun.blockScore + bonus;
+    const totalScore = roundToTwoDecimals(currentRun.blockScore + bonus);
 
     const stoppedRun: ActiveRunState = {
       ...currentRun,
@@ -1810,15 +1837,15 @@ export const CompetitionProvider: React.FC<{ children: React.ReactNode }> = ({ c
       stopTimestamp: now,
       isLockedForReview: true,
       stoppedBy: user ? {
-        email: user.email,
-        displayName: user.displayName,
-        role: user.role
-      } : undefined
+        email: user.email || '',
+        displayName: user.displayName || 'Evaluator',
+        role: user.role || 'EVALUATOR'
+      } : null
     };
 
     const stoppedTimer: ArenaTimerState = {
       status: 'stopped',
-      totalDurationSeconds: 120,
+      totalDurationSeconds: maxDuration,
       remainingSeconds: frozenSeconds,
       startTimestamp: currentRun.startTimestamp,
       stopTimestamp: now,
@@ -1834,7 +1861,7 @@ export const CompetitionProvider: React.FC<{ children: React.ReactNode }> = ({ c
       round: currentRun.round,
       schoolName: school?.name || 'Current Team',
       teamName: school?.teamName || '',
-      action: `RUN STOPPED: ${frozenSeconds}s remaining (+${bonus} bonus). Score: ${totalScore} pts`,
+      action: `RUN STOPPED: ${frozenSeconds.toFixed(2)}s remaining (+${bonus.toFixed(2)} bonus). Score: ${totalScore.toFixed(2)} pts`,
       newScore: totalScore,
       userEmail: user?.email,
       userName: user?.displayName,
@@ -1885,13 +1912,14 @@ export const CompetitionProvider: React.FC<{ children: React.ReactNode }> = ({ c
     const roundKey: 1 | 2 = (round === 3 ? 1 : round) as 1 | 2;
     const targetSchoolId = schoolId || state.runQueue[roundKey]?.currentSchoolId || state.schools[0]?.id || null;
     const school = state.schools.find(s => s.id === targetSchoolId);
+    const duration = round === 3 ? 90 : 120;
 
     const resetRun: ActiveRunState = {
       status: 'READY',
       round,
       schoolId: targetSchoolId,
-      timeAllocated: 120,
-      timeLeftSeconds: 120,
+      timeAllocated: duration,
+      timeLeftSeconds: duration,
       timeBonus: 0,
       blockScore: 0,
       finalScore: 0,
@@ -1908,13 +1936,13 @@ export const CompetitionProvider: React.FC<{ children: React.ReactNode }> = ({ c
       operatorNotes: '',
       isLockedForReview: false,
       manualTimeBonus: null,
-      stoppedBy: undefined
+      stoppedBy: null
     };
 
     const resetTimer: ArenaTimerState = {
       status: 'idle',
-      totalDurationSeconds: 120,
-      remainingSeconds: 120,
+      totalDurationSeconds: duration,
+      remainingSeconds: duration,
       startTimestamp: null,
       stopTimestamp: null,
       round,
@@ -1924,11 +1952,17 @@ export const CompetitionProvider: React.FC<{ children: React.ReactNode }> = ({ c
     let updatedScores = { ...state.scores };
     if (targetSchoolId && updatedScores[targetSchoolId]) {
       const existing = updatedScores[targetSchoolId];
-      if (existing.round1?.isDraft) {
+      if (round === 1 && existing.round1?.isDraft) {
         updatedScores[targetSchoolId] = {
           ...existing,
           round1: null,
           totalScore: (existing.round2?.finalScore || 0) + existing.round3Score
+        };
+      } else if (round === 2 && existing.round2?.isDraft) {
+        updatedScores[targetSchoolId] = {
+          ...existing,
+          round2: null,
+          totalScore: (existing.round1?.finalScore || 0) + existing.round3Score
         };
       }
     }
@@ -1939,7 +1973,7 @@ export const CompetitionProvider: React.FC<{ children: React.ReactNode }> = ({ c
       round,
       schoolName: school?.name || 'Current Team',
       teamName: school?.teamName || '',
-      action: `RUN RESTARTED: Draft discarded, timer reset to 01:20`,
+      action: `RUN RESTARTED: Draft discarded, timer reset to ${duration.toFixed(2)}`,
       userEmail: user?.email,
       userName: user?.displayName,
       userRole: user?.role

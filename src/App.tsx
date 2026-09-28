@@ -35,6 +35,13 @@ function MainCompetitionApp() {
   const [activeTab, setActiveTab] = useState<string>('dashboard');
   const [showWinnerModal, setShowWinnerModal] = useState<boolean>(false);
 
+  // Automatically direct Evaluator to Evaluator Mode for active round
+  useEffect(() => {
+    if (userRole === 'EVALUATOR' && activeTab === 'dashboard') {
+      setActiveTab(`round_${state.currentRound || 1}`);
+    }
+  }, [userRole, activeTab, state.currentRound]);
+
   // Synchronize URL query parameter when view changes
   const handleSwitchView = (view: 'operator' | 'display') => {
     setActiveView(view);

@@ -17,6 +17,7 @@ import {
   Square
 } from 'lucide-react';
 import { useCompetition } from '../../context/CompetitionContext';
+import { useAuth } from '../../context/AuthContext';
 import { useArenaTimer } from '../../hooks/useArenaTimer';
 import { 
   OFFICIAL_BLOCK_WEIGHTS, 
@@ -25,13 +26,17 @@ import {
 } from '../../data/officialRules';
 
 export const Round2BlockPullView: React.FC = () => {
+  const { user: currentUser } = useAuth();
   const { 
     state, 
     currentSchool, 
     saveBlockPullDraft, 
     publishBlockPullScore, 
     advanceQueue,
-    setDisplayState
+    setDisplayState,
+    startActiveRun,
+    stopActiveRun,
+    restartActiveRun
   } = useCompetition();
 
   const [selectedSchoolId, setSelectedSchoolId] = useState<string>('');
@@ -134,15 +139,18 @@ export const Round2BlockPullView: React.FC = () => {
     if (!selectedSchoolId) return;
     handleReset();
     startTimer(120, 2, selectedSchoolId);
+    startActiveRun(selectedSchoolId, 2, 120);
     setDisplayState('live_run');
   };
 
   const handleStopTimer = () => {
-    stopTimer();
+    const frozen = stopTimer();
+    stopActiveRun(currentUser, frozen);
   };
 
   const handleRestartTimer = () => {
     resetTimer(120);
+    restartActiveRun(currentUser);
     handleReset();
   };
 
@@ -165,7 +173,7 @@ export const Round2BlockPullView: React.FC = () => {
     });
     setIsPreviewModalOpen(false);
     setFeedbackMsg({ 
-      text: `Score of ${scoreCalculation.finalScore} PTS officially published for ${activeSchool?.name} (${activeSchool?.teamName})!`, 
+      text: `Score of ${scoreCalculation.finalScore.toFixed(2)} PTS officially published for ${activeSchool?.name} (${activeSchool?.teamName})!`, 
       type: 'success' 
     });
     setTimeout(() => setFeedbackMsg(null), 4000);
@@ -404,10 +412,10 @@ export const Round2BlockPullView: React.FC = () => {
                 <div className={`text-5xl font-mono font-black tracking-tight ${
                   isTimerRunning && isUrgent ? 'text-red-500' : isTimerRunning ? 'text-amber-400' : 'text-slate-100'
                 }`}>
-                  {formattedTime && ownsTimer ? formattedTime : '01:20'}
+                  {formattedTime && ownsTimer ? formattedTime : '120.00'}
                 </div>
                 <div className="text-xs font-mono text-slate-400 mt-1">
-                  Time Left: {displaySeconds}s (Bonus: +{displaySeconds} pts)
+                  Time Left: {displaySeconds.toFixed(2)}s (Bonus: +{displaySeconds.toFixed(2)} pts)
                 </div>
               </div>
 
@@ -468,8 +476,8 @@ export const Round2BlockPullView: React.FC = () => {
               <div className="flex items-center justify-between">
                 <span className="text-xs text-slate-400">Seconds Unused:</span>
                 <span className="text-2xl font-display font-black text-emerald-400">
-                  {effectiveTimeLeft}s
-                  <span className="text-xs font-normal text-slate-400 ml-1.5">(+{effectiveTimeLeft} pts)</span>
+                  {effectiveTimeLeft.toFixed(2)}s
+                  <span className="text-xs font-normal text-slate-400 ml-1.5">(+{scoreCalculation.timeBonus.toFixed(2)} pts)</span>
                 </span>
               </div>
 
@@ -477,7 +485,7 @@ export const Round2BlockPullView: React.FC = () => {
                 type="range"
                 min="0"
                 max="120"
-                step="1"
+                step="0.01"
                 value={effectiveTimeLeft}
                 disabled={isTimerRunning}
                 onChange={(e) => setManualTimeLeft(Number(e.target.value))}
@@ -584,7 +592,7 @@ export const Round2BlockPullView: React.FC = () => {
             
             <div className="mt-2 mb-4">
               <div className="text-5xl font-display font-black text-white tracking-tight">
-                {scoreCalculation.finalScore}
+                {scoreCalculation.finalScore.toFixed(2)}
                 <span className="text-lg font-normal text-emerald-300 ml-2 font-mono">PTS</span>
               </div>
               <div className="text-xs text-slate-400 mt-1">
@@ -597,7 +605,7 @@ export const Round2BlockPullView: React.FC = () => {
               <div className="flex items-center justify-between">
                 <span className="text-slate-300">Blocks Score ({pulledBlockIds.length} pulled):</span>
                 <span className="font-mono font-bold text-white text-sm">
-                  +{scoreCalculation.blockScore} pts
+                  +{scoreCalculation.blockScore.toFixed(2)} pts
                 </span>
               </div>
 
@@ -608,7 +616,7 @@ export const Round2BlockPullView: React.FC = () => {
                   return (
                     <div key={id} className="flex items-center justify-between">
                       <span>• {def?.label} Sled Pull:</span>
-                      <span className="text-emerald-300">+{def?.fullPoints}</span>
+                      <span className="text-emerald-300">+{def?.fullPoints.toFixed(2)}</span>
                     </div>
                   );
                 })}
@@ -618,23 +626,23 @@ export const Round2BlockPullView: React.FC = () => {
               </div>
 
               <div className="flex items-center justify-between pt-2 border-t border-slate-800">
-                <span className="text-slate-300">Time Left Bonus ({scoreCalculation.timeLeftSeconds}s):</span>
+                <span className="text-slate-300">Time Left Bonus ({scoreCalculation.timeLeftSeconds.toFixed(2)}s):</span>
                 <span className="font-mono font-bold text-emerald-400 text-sm">
-                  +{scoreCalculation.timeBonus} pts
+                  +{scoreCalculation.timeBonus.toFixed(2)} pts
                 </span>
               </div>
 
               <div className="flex items-center justify-between">
                 <span className="text-slate-300">Boundary Touches ({scoreCalculation.boundaryTouches} × 5):</span>
                 <span className={`font-mono font-bold text-sm ${scoreCalculation.boundaryPenalty > 0 ? 'text-rose-400' : 'text-slate-400'}`}>
-                  -{scoreCalculation.boundaryPenalty} pts
+                  -{scoreCalculation.boundaryPenalty.toFixed(2)} pts
                 </span>
               </div>
 
               <div className="flex items-center justify-between pt-2 border-t border-slate-800 font-bold">
                 <span className="text-white text-sm">Final Round 2 Score:</span>
                 <span className="font-mono text-base text-emerald-400">
-                  {scoreCalculation.finalScore} pts
+                  {scoreCalculation.finalScore.toFixed(2)} pts
                 </span>
               </div>
             </div>
@@ -721,25 +729,25 @@ export const Round2BlockPullView: React.FC = () => {
 
               <div className="flex justify-between items-center text-xs">
                 <span className="text-slate-300">Blocks Pulled ({pulledBlockIds.length} of 6):</span>
-                <span className="font-mono font-bold text-white">+{scoreCalculation.blockScore} pts</span>
+                <span className="font-mono font-bold text-white">+{scoreCalculation.blockScore.toFixed(2)} pts</span>
               </div>
 
               <div className="flex justify-between items-center text-xs">
-                <span className="text-slate-300">Time Left Bonus ({scoreCalculation.timeLeftSeconds}s × 1):</span>
-                <span className="font-mono font-bold text-emerald-400">+{scoreCalculation.timeBonus} pts</span>
+                <span className="text-slate-300">Time Left Bonus ({scoreCalculation.timeLeftSeconds.toFixed(2)}s × 1):</span>
+                <span className="font-mono font-bold text-emerald-400">+{scoreCalculation.timeBonus.toFixed(2)} pts</span>
               </div>
 
               <div className="flex justify-between items-center text-xs">
                 <span className="text-slate-300">Boundary Touches ({scoreCalculation.boundaryTouches} touches × 5):</span>
                 <span className={`font-mono font-bold ${scoreCalculation.boundaryPenalty > 0 ? 'text-rose-400' : 'text-slate-400'}`}>
-                  -{scoreCalculation.boundaryPenalty} pts
+                  -{scoreCalculation.boundaryPenalty.toFixed(2)} pts
                 </span>
               </div>
 
               <div className="flex justify-between items-center text-base pt-3 border-t-2 border-slate-700 font-bold">
                 <span className="text-white">FINAL ROUND 2 SCORE:</span>
                 <span className="text-2xl font-display font-black text-emerald-400">
-                  {scoreCalculation.finalScore} PTS
+                  {scoreCalculation.finalScore.toFixed(2)} PTS
                 </span>
               </div>
             </div>

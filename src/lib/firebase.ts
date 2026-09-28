@@ -112,6 +112,32 @@ export function subscribeToCompetitionState(
 }
 
 /**
+ * Recursively sanitizes objects and arrays for Firestore.
+ * Omits undefined fields and converts undefined inside arrays to null,
+ * guaranteeing no "Unsupported field value: undefined" errors can occur.
+ */
+export function sanitizeForFirestore<T>(val: T): T {
+  if (val === undefined) {
+    return null as unknown as T;
+  }
+  if (val === null || typeof val !== 'object') {
+    return val;
+  }
+  if (Array.isArray(val)) {
+    return val.map((item) => (item === undefined ? null : sanitizeForFirestore(item))) as unknown as T;
+  }
+  const result: Record<string, any> = {};
+  for (const [key, value] of Object.entries(val)) {
+    if (value === undefined) {
+      result[key] = null;
+    } else {
+      result[key] = sanitizeForFirestore(value);
+    }
+  }
+  return result as T;
+}
+
+/**
  * Synchronize the current competition state to Firestore.
  * Updates both the master document and collections for granular auditability.
  */
@@ -120,11 +146,12 @@ export async function saveCompetitionStateToFirestore(state: CompetitionState): 
     // 1. Write the unified master state document for ultra-fast snapshot updates across devices.
     // No merge option: `state` is always the complete CompetitionState, and merge:true would
     // deep-merge nested map fields (e.g. `scores`), leaving deleted entries as orphaned leftovers.
-    // Firestore rejects `undefined` anywhere in the document; a JSON round-trip drops those keys.
-    const cleanState = JSON.parse(JSON.stringify({
+    // Thoroughly strip undefined anywhere in the document hierarchy.
+    const baseObj = {
       ...state,
       lastUpdated: Date.now()
-    }));
+    };
+    const cleanState = sanitizeForFirestore(JSON.parse(JSON.stringify(baseObj)));
     await setDoc(competitionDocRef, cleanState);
 
     // 2. Also update collections for schools, scores, matches, and audit logs
@@ -133,10 +160,10 @@ export async function saveCompetitionStateToFirestore(state: CompetitionState): 
       const batch = writeBatch(db);
       state.schools.slice(0, 20).forEach(school => {
         const sRef = doc(db, 'schools', school.id);
-        batch.set(sRef, {
+        batch.set(sRef, sanitizeForFirestore({
           ...school,
           updatedAt: new Date().toISOString()
-        }, { merge: true });
+        }), { merge: true });
       });
       await batch.commit().catch(e => console.warn('School batch sync:', e));
     }
@@ -192,10 +219,10 @@ export async function getUserProfile(uid: string): Promise<AppUser | null> {
 export async function saveUserProfile(user: AppUser): Promise<void> {
   try {
     const uRef = doc(db, 'users', user.uid);
-    await setDoc(uRef, {
+    await setDoc(uRef, sanitizeForFirestore({
       ...user,
       updatedAt: new Date().toISOString()
-    }, { merge: true });
+    }), { merge: true });
   } catch (err) {
     console.error('Error saving user profile:', err);
     throw err;

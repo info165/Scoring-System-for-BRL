@@ -1,3 +1,11 @@
+import { roundToTwoDecimals, formatScore, formatBrlTimer } from '../utils/arenaAudio';
+
+export { roundToTwoDecimals, formatScore, formatBrlTimer };
+
+export const getRoundDurationSeconds = (round: 1 | 2 | 3): number => {
+  return round === 3 ? 90 : 120;
+};
+
 // ========================================================
 // OFFICIAL BHARAT ROBOTICS LEAGUE (BRL) 2026 SCORING SYSTEM
 // Authoritative scoring definitions for 29 September 2026
@@ -72,7 +80,7 @@ export const BLOCK_PUSH_CONFIG = {
   totalTimeSeconds: 120,
   maxTimeBonus: 120,
   timeBonusRate: 1, // 1 point per second left
-  description: '120 seconds. Pushed completely inside box = 100% points. Any portion outside = 50% points. Time left = 1 pt/sec bonus.'
+  description: '120.00 seconds. Pushed completely inside box = 100% points. Any portion outside = 50% points. Time left to two decimal places = Time Bonus.'
 };
 
 export interface BlockPushInputBlock {
@@ -84,8 +92,8 @@ export const calculateBlockPushScore = (
   blocks: BlockPushInputBlock[],
   timeLeftSeconds: number
 ) => {
-  const safeTimeLeft = Math.max(0, Math.min(BLOCK_PUSH_CONFIG.totalTimeSeconds, Math.floor(timeLeftSeconds || 0)));
-  const timeBonus = safeTimeLeft * BLOCK_PUSH_CONFIG.timeBonusRate;
+  const safeTimeLeft = Math.max(0, Math.min(BLOCK_PUSH_CONFIG.totalTimeSeconds, roundToTwoDecimals(timeLeftSeconds || 0)));
+  const timeBonus = safeTimeLeft; // Exact time remaining to 2 decimal places
 
   let blockScore = 0;
   const processedBlocks = OFFICIAL_BLOCK_WEIGHTS.map(def => {
@@ -104,7 +112,7 @@ export const calculateBlockPushScore = (
     };
   });
 
-  const finalScore = blockScore + timeBonus;
+  const finalScore = roundToTwoDecimals(blockScore + timeBonus);
 
   return {
     blocks: processedBlocks,
@@ -125,7 +133,7 @@ export const BLOCK_PULL_CONFIG = {
   maxTimeBonus: 120,
   timeBonusRate: 1, // 1 point per second left
   penaltyPerTouch: 5, // -5 pts per boundary touch
-  description: '120 seconds. Full points per pulled block. Time left = 1 pt/sec bonus. Boundary touch = -5 pts penalty each.'
+  description: '120.00 seconds. Full points per pulled block. Time left to two decimal places = Time Bonus. Boundary touch = -5 pts penalty each.'
 };
 
 export const calculateBlockPullScore = (
@@ -133,8 +141,8 @@ export const calculateBlockPullScore = (
   timeLeftSeconds: number,
   boundaryTouches: number
 ) => {
-  const safeTimeLeft = Math.max(0, Math.min(BLOCK_PULL_CONFIG.totalTimeSeconds, Math.floor(timeLeftSeconds || 0)));
-  const timeBonus = safeTimeLeft * BLOCK_PULL_CONFIG.timeBonusRate;
+  const safeTimeLeft = Math.max(0, Math.min(BLOCK_PULL_CONFIG.totalTimeSeconds, roundToTwoDecimals(timeLeftSeconds || 0)));
+  const timeBonus = safeTimeLeft; // Exact time remaining to 2 decimal places
   const safeTouches = Math.max(0, Math.floor(boundaryTouches || 0));
   const boundaryPenalty = safeTouches * BLOCK_PULL_CONFIG.penaltyPerTouch;
 
@@ -147,7 +155,7 @@ export const calculateBlockPullScore = (
   });
 
   const rawTotal = blockScore + timeBonus - boundaryPenalty;
-  const finalScore = Math.max(0, rawTotal);
+  const finalScore = Math.max(0, roundToTwoDecimals(rawTotal));
 
   return {
     pulledBlockIds,
@@ -172,7 +180,7 @@ export const ROBO_WAR_CONFIG = {
   inPitMultiplier: 3,
   outPitMultiplier: 2,
   drawPoints: 50,
-  description: '90 seconds head-to-head. Opponent in IN-PIT = Time Left × 3 pts. Opponent in OUT-PIT = Time Left × 2 pts. Loser receives 0 pts. If the fight ends in a draw, both teams receive 50 pts each.'
+  description: '90.00 seconds head-to-head. Opponent in IN-PIT = Time Left × 3 pts. Opponent in OUT-PIT = Time Left × 2 pts. Loser receives 0.00 pts. If the fight ends in a draw, both teams receive 50.00 pts each.'
 };
 
 export const calculateRoboWarScore = (
@@ -180,7 +188,7 @@ export const calculateRoboWarScore = (
   pitType: 'in_pit' | 'out_pit' | null,
   timeLeftSeconds: number
 ) => {
-  const safeTimeLeft = Math.max(0, Math.min(ROBO_WAR_CONFIG.totalTimeSeconds, Math.floor(timeLeftSeconds || 0)));
+  const safeTimeLeft = Math.max(0, Math.min(ROBO_WAR_CONFIG.totalTimeSeconds, roundToTwoDecimals(timeLeftSeconds || 0)));
 
   if (result === 'draw') {
     return {
@@ -189,12 +197,12 @@ export const calculateRoboWarScore = (
       teamAPoints: ROBO_WAR_CONFIG.drawPoints,
       teamBPoints: ROBO_WAR_CONFIG.drawPoints,
       winnerPoints: ROBO_WAR_CONFIG.drawPoints,
-      loserPoints: ROBO_WAR_CONFIG.drawPoints
+      loserPoints: 0
     };
   }
 
   const multiplier = pitType === 'in_pit' ? ROBO_WAR_CONFIG.inPitMultiplier : ROBO_WAR_CONFIG.outPitMultiplier;
-  const winnerPoints = safeTimeLeft * multiplier;
+  const winnerPoints = roundToTwoDecimals(safeTimeLeft * multiplier);
   const loserPoints = 0;
 
   return {
@@ -214,3 +222,4 @@ export const OFFICIAL_TIE_POLICY = {
   hasTieBreaker: false,
   message: 'TIE DETECTED: Multiple teams share identical total points. Awaiting official referee / organizer decision.'
 };
+

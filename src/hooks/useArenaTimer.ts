@@ -5,17 +5,18 @@ import {
   playTenSecondWarningSound, 
   playTimeOverBuzzerSound, 
   formatBrlTimer,
+  roundToTwoDecimals,
   unlockAudioContext 
 } from '../utils/arenaAudio';
 
 export interface ArenaTimerHookReturn {
   remainingSeconds: number;
-  formattedTime: string; // e.g. "01:20", "00:47", "00:00"
+  formattedTime: string; // e.g. "120.00", "47.83", "0.00"
   status: 'idle' | 'running' | 'stopped' | 'time_over';
   isUrgent: boolean; // <= 10s and running
   isTimeOver: boolean;
   start: (duration?: number, round?: 1 | 2 | 3, schoolId?: string, matchId?: string) => void;
-  stop: () => void;
+  stop: () => number;
   reset: (duration?: number, matchId?: string) => void;
   elapsedSeconds: number;
 }
@@ -55,17 +56,18 @@ export function useArenaTimer(round?: 1 | 2 | 3): ArenaTimerHookReturn {
       state.activeRun.round === arenaTimer.round &&
       (state.activeRun.status === 'STOPPED' || state.activeRun.status === 'PUBLISHED')
     ) {
-      return Math.max(0, state.activeRun.timeLeftSeconds);
+      return Math.max(0, roundToTwoDecimals(state.activeRun.timeLeftSeconds));
     }
     if (arenaTimer.status === 'idle') {
-      return arenaTimer.totalDurationSeconds || defaultTotal;
+      return roundToTwoDecimals(arenaTimer.totalDurationSeconds || defaultTotal);
     }
     if (arenaTimer.status === 'stopped' || arenaTimer.status === 'time_over') {
-      return Math.max(0, arenaTimer.remainingSeconds || 0);
+      return Math.max(0, roundToTwoDecimals(arenaTimer.remainingSeconds || 0));
     }
     if (arenaTimer.status === 'running' && arenaTimer.startTimestamp) {
-      const elapsed = Math.floor((Date.now() - arenaTimer.startTimestamp) / 1000);
-      return Math.max(0, (arenaTimer.totalDurationSeconds || defaultTotal) - elapsed);
+      const elapsed = (Date.now() - arenaTimer.startTimestamp) / 1000;
+      const raw = (arenaTimer.totalDurationSeconds || defaultTotal) - elapsed;
+      return Math.max(0, roundToTwoDecimals(raw));
     }
     return defaultTotal;
   };
@@ -85,7 +87,7 @@ export function useArenaTimer(round?: 1 | 2 | 3): ArenaTimerHookReturn {
     }
   }, [arenaTimer.status, arenaTimer.startTimestamp, arenaTimer.totalDurationSeconds, arenaTimer.remainingSeconds]);
 
-  // High-frequency tick when running
+  // High-frequency tick when running: 25ms ensures smooth hundredths countdown
   useEffect(() => {
     if (arenaTimer.status !== 'running' || !arenaTimer.startTimestamp) return;
 
@@ -99,13 +101,13 @@ export function useArenaTimer(round?: 1 | 2 | 3): ArenaTimerHookReturn {
         playTenSecondWarningSound();
       }
 
-      // Trigger Time Over sound and freeze
-      if (sec === 0 && !overRef.current) {
+      // Trigger Time Over sound and freeze at 0.00
+      if (sec <= 0 && !overRef.current) {
         overRef.current = true;
         playTimeOverBuzzerSound();
-        stopArenaTimer();
+        stopArenaTimer(0);
       }
-    }, 150);
+    }, 25);
 
     return () => clearInterval(interval);
   }, [arenaTimer.status, arenaTimer.startTimestamp, arenaTimer.totalDurationSeconds, stopArenaTimer]);
@@ -122,6 +124,7 @@ export function useArenaTimer(round?: 1 | 2 | 3): ArenaTimerHookReturn {
     const currentSec = calculateRemaining();
     setRemainingSeconds(currentSec);
     stopArenaTimer(currentSec);
+    return currentSec;
   };
 
   const handleReset = (duration: number = defaultTotal, matchId?: string) => {
@@ -144,6 +147,6 @@ export function useArenaTimer(round?: 1 | 2 | 3): ArenaTimerHookReturn {
     start: handleStart,
     stop: handleStop,
     reset: handleReset,
-    elapsedSeconds: Math.max(0, total - remainingSeconds)
+    elapsedSeconds: roundToTwoDecimals(Math.max(0, total - remainingSeconds))
   };
 }

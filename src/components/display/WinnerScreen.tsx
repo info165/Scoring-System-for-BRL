@@ -110,7 +110,7 @@ export const WinnerScreen: React.FC<WinnerScreenProps> = ({ onClose }) => {
 
               <div className="pt-4 border-t border-slate-800 flex items-center justify-between font-mono">
                 <span className="text-xs text-slate-400">Total Score:</span>
-                <span className="text-3xl font-bold text-slate-100">{runnerUp1.totalScore} pts</span>
+                <span className="text-3xl font-bold text-slate-100">{runnerUp1.totalScore.toFixed(2)} pts</span>
               </div>
             </div>
           )}
@@ -155,7 +155,7 @@ export const WinnerScreen: React.FC<WinnerScreenProps> = ({ onClose }) => {
               <div className="pt-4 border-t border-amber-500/30 flex items-center justify-between font-mono">
                 <span className="text-xs font-bold text-amber-300 uppercase tracking-wider">CHAMPIONSHIP SCORE:</span>
                 <span className="text-4xl sm:text-5xl font-display font-black text-amber-400">
-                  {champion.totalScore} <span className="text-base font-normal text-slate-400">PTS</span>
+                  {champion.totalScore.toFixed(2)} <span className="text-base font-normal text-slate-400">PTS</span>
                 </span>
               </div>
             </div>
@@ -193,7 +193,7 @@ export const WinnerScreen: React.FC<WinnerScreenProps> = ({ onClose }) => {
 
               <div className="pt-4 border-t border-slate-800 flex items-center justify-between font-mono">
                 <span className="text-xs text-slate-400">Total Score:</span>
-                <span className="text-3xl font-bold text-slate-200">{runnerUp2.totalScore} pts</span>
+                <span className="text-3xl font-bold text-slate-200">{runnerUp2.totalScore.toFixed(2)} pts</span>
               </div>
             </div>
           )}

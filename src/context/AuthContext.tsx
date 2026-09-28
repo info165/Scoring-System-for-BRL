@@ -249,7 +249,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       displayName: name.trim(),
       role,
       createdAt: new Date().toISOString(),
-      lastLogin: undefined,
+      lastLogin: null,
       isActive: true
     };
 

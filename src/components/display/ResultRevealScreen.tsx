@@ -136,7 +136,7 @@ export const ResultRevealScreen: React.FC = () => {
 
               <div className="flex items-baseline gap-2">
                 <span className="text-6xl sm:text-8xl font-display font-black text-transparent bg-clip-text bg-gradient-to-r from-amber-300 via-amber-400 to-yellow-500 tracking-tight leading-none drop-shadow-[0_0_35px_rgba(245,158,11,0.5)]">
-                  {finalScore}
+                  {typeof finalScore === 'number' ? finalScore.toFixed(2) : finalScore}
                 </span>
                 <span className="text-xl sm:text-2xl font-display font-black text-amber-400">
                   PTS
@@ -173,7 +173,7 @@ export const ResultRevealScreen: React.FC = () => {
                             </span>
                           </div>
                           <span className="text-sm font-black font-display ml-2">
-                            +{block.pointsEarned} pts
+                            +{block.pointsEarned.toFixed(2)} pts
                           </span>
                         </div>
                       ))
@@ -189,7 +189,7 @@ export const ResultRevealScreen: React.FC = () => {
                     <div className="bg-slate-950/90 border border-slate-800 rounded-xl p-3 text-left">
                       <div className="text-[11px] font-mono text-slate-400 uppercase">BLOCK POINTS</div>
                       <div className="text-2xl font-display font-black text-white mt-0.5">
-                        {blockScore} <span className="text-xs font-normal text-slate-400">pts</span>
+                        {typeof blockScore === 'number' ? blockScore.toFixed(2) : blockScore} <span className="text-xs font-normal text-slate-400">pts</span>
                       </div>
                       <div className="text-[10px] text-slate-500 font-mono mt-0.5">
                         {activeBlocks.length} of 6 blocks pushed
@@ -199,17 +199,17 @@ export const ResultRevealScreen: React.FC = () => {
                     <div className="bg-slate-950/90 border border-slate-800 rounded-xl p-3 text-left">
                       <div className="text-[11px] font-mono text-slate-400 uppercase">TIME REMAINING</div>
                       <div className="text-2xl font-display font-black text-cyan-400 mt-0.5">
-                        {timeLeft} <span className="text-xs font-normal text-slate-400">sec</span>
+                        {typeof timeLeft === 'number' ? timeLeft.toFixed(2) : timeLeft} <span className="text-xs font-normal text-slate-400">sec</span>
                       </div>
                       <div className="text-[10px] text-slate-500 font-mono mt-0.5">
-                        Allocated: 120s (Used: {Math.max(0, 120 - timeLeft)}s)
+                        Allocated: 120.00s (Used: {typeof timeLeft === 'number' ? Math.max(0, 120 - timeLeft).toFixed(2) : 0}s)
                       </div>
                     </div>
 
                     <div className="bg-slate-950/90 border border-slate-800 rounded-xl p-3 text-left">
                       <div className="text-[11px] font-mono text-slate-400 uppercase">TIME BONUS</div>
                       <div className="text-2xl font-display font-black text-emerald-400 mt-0.5">
-                        +{timeBonus} <span className="text-xs font-normal text-slate-400">pts</span>
+                        +{typeof timeBonus === 'number' ? timeBonus.toFixed(2) : timeBonus} <span className="text-xs font-normal text-slate-400">pts</span>
                       </div>
                       <div className="text-[10px] text-slate-500 font-mono mt-0.5">
                         +1 pt per unused second
@@ -225,25 +225,25 @@ export const ResultRevealScreen: React.FC = () => {
                   <div className="bg-slate-950/90 border border-slate-800 rounded-xl p-3 text-left">
                     <div className="text-[11px] font-mono text-slate-400 uppercase">BLOCK POINTS</div>
                     <div className="text-2xl font-display font-black text-white mt-0.5">
-                      {blockScore} <span className="text-xs font-normal text-slate-400">pts</span>
+                      {typeof blockScore === 'number' ? blockScore.toFixed(2) : blockScore} <span className="text-xs font-normal text-slate-400">pts</span>
                     </div>
                   </div>
                   <div className="bg-slate-950/90 border border-slate-800 rounded-xl p-3 text-left">
                     <div className="text-[11px] font-mono text-slate-400 uppercase">TIME REMAINING</div>
                     <div className="text-2xl font-display font-black text-cyan-400 mt-0.5">
-                      {timeLeft} <span className="text-xs font-normal text-slate-400">sec</span>
+                      {typeof timeLeft === 'number' ? timeLeft.toFixed(2) : timeLeft} <span className="text-xs font-normal text-slate-400">sec</span>
                     </div>
                   </div>
                   <div className="bg-slate-950/90 border border-slate-800 rounded-xl p-3 text-left">
                     <div className="text-[11px] font-mono text-slate-400 uppercase">TIME BONUS</div>
                     <div className="text-2xl font-display font-black text-emerald-400 mt-0.5">
-                      +{timeBonus} <span className="text-xs font-normal text-slate-400">pts</span>
+                      +{typeof timeBonus === 'number' ? timeBonus.toFixed(2) : timeBonus} <span className="text-xs font-normal text-slate-400">pts</span>
                     </div>
                   </div>
                   <div className="bg-slate-950/90 border border-slate-800 rounded-xl p-3 text-left">
                     <div className="text-[11px] font-mono text-slate-400 uppercase">BOUNDARY PENALTY</div>
                     <div className="text-2xl font-display font-black text-rose-400 mt-0.5">
-                      -{publishedResult?.round2Details?.boundaryPenalty ?? (round2Score?.boundaryPenalty ?? 0)} <span className="text-xs font-normal text-slate-400">pts</span>
+                      -{(publishedResult?.round2Details?.boundaryPenalty ?? (round2Score?.boundaryPenalty ?? 0)).toFixed(2)} <span className="text-xs font-normal text-slate-400">pts</span>
                     </div>
                   </div>
                 </div>

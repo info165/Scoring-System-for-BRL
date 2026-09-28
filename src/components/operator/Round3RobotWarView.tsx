@@ -622,7 +622,7 @@ export const Round3RobotWarView: React.FC = () => {
                     {formatBrlTimer(clockSeconds)}
                   </div>
                   <div className="text-xs font-mono text-slate-400 mt-1">
-                    Time Left: {clockSeconds}s • press STOP the moment the fight ends
+                    Time Left: {clockSeconds.toFixed(2)}s • press STOP the moment the fight ends
                   </div>
                 </div>
 
@@ -673,7 +673,7 @@ export const Round3RobotWarView: React.FC = () => {
                   </h3>
                 </div>
                 <span className="text-xs font-mono font-bold px-2.5 py-1 rounded bg-red-950 text-red-300 border border-red-800">
-                  0 TO 90 SECONDS
+                  0.00 TO 90.00 SECONDS
                 </span>
               </div>
 
@@ -682,10 +682,10 @@ export const Round3RobotWarView: React.FC = () => {
                   <span className="text-xs text-slate-400 uppercase font-bold">Time Left:</span>
                   <div className="flex items-center gap-2">
                     <span className="text-2xl font-display font-black text-red-400">
-                      {timeLeftSeconds}s
+                      {timeLeftSeconds.toFixed(2)}s
                     </span>
                     <span className="text-xs font-mono text-slate-400">
-                      ({90 - timeLeftSeconds}s elapsed)
+                      ({(90 - timeLeftSeconds).toFixed(2)}s elapsed)
                     </span>
                   </div>
                 </div>
@@ -694,7 +694,7 @@ export const Round3RobotWarView: React.FC = () => {
                   type="range"
                   min="0"
                   max="90"
-                  step="1"
+                  step="0.01"
                   value={timeLeftSeconds}
                   onChange={(e) => setManualTimeLeft(Number(e.target.value))}
                   disabled={isTimerRunning}
@@ -755,7 +755,7 @@ export const Round3RobotWarView: React.FC = () => {
 
               <div className="mt-2 mb-4">
                 <div className="text-5xl font-display font-black text-white tracking-tight">
-                  {shownMainPoints}
+                  {shownMainPoints.toFixed(2)}
                   <span className="text-lg font-normal text-red-300 ml-2 font-mono">PTS</span>
                 </div>
                 <div className="text-xs text-slate-400 mt-1">
@@ -788,7 +788,7 @@ export const Round3RobotWarView: React.FC = () => {
                 <div className="flex items-center justify-between">
                   <span className="text-slate-300">Time Left:</span>
                   <span className="font-mono font-bold text-red-300">
-                    {timeLeftSeconds} seconds
+                    {timeLeftSeconds.toFixed(2)} seconds
                   </span>
                 </div>
 
@@ -796,17 +796,17 @@ export const Round3RobotWarView: React.FC = () => {
                   <span className="text-slate-300">Calculation:</span>
                   <span className="font-mono font-bold text-white">
                     {selectedWinner === 'draw'
-                      ? (challengerId ? `Draw = ${ROBO_WAR_CONFIG.drawPoints} pts (non-challenger)` : `Draw = ${ROBO_WAR_CONFIG.drawPoints} pts each`)
+                      ? (challengerId ? `Draw = ${ROBO_WAR_CONFIG.drawPoints.toFixed(2)} pts (non-challenger)` : `Draw = ${ROBO_WAR_CONFIG.drawPoints.toFixed(2)} pts each`)
                       : winnerIsChallenger
-                        ? `${timeLeftSeconds} × ${calculation.multiplier} = ${calculation.winnerPoints}, challenger = 0 pts`
-                        : `${timeLeftSeconds} × ${calculation.multiplier} = ${calculation.winnerPoints} pts`}
+                        ? `${timeLeftSeconds.toFixed(2)} × ${calculation.multiplier} = ${calculation.winnerPoints.toFixed(2)}, challenger = 0.00 pts`
+                        : `${timeLeftSeconds.toFixed(2)} × ${calculation.multiplier} = ${calculation.winnerPoints.toFixed(2)} pts`}
                   </span>
                 </div>
 
                 <div className="flex items-center justify-between">
                   <span className="text-slate-300">{selectedWinner === 'draw' ? 'Other Team:' : 'Loser Points:'}</span>
                   <span className="font-mono font-bold text-slate-500">
-                    {selectedWinner === 'draw' ? (challengerId ? '0 pts (Challenger)' : `${ROBO_WAR_CONFIG.drawPoints} pts (Draw)`) : '0 pts (Winner Takes All)'}
+                    {selectedWinner === 'draw' ? (challengerId ? '0.00 pts (Challenger)' : `${ROBO_WAR_CONFIG.drawPoints.toFixed(2)} pts (Draw)`) : '0.00 pts (Winner Takes All)'}
                   </span>
                 </div>
               </div>
@@ -890,10 +890,10 @@ export const Round3RobotWarView: React.FC = () => {
                 <div className="font-bold text-white truncate">{teamASchool.name}</div>
                 <div className="text-red-400 font-mono font-bold text-sm mt-1">
                   {selectedWinner === 'team_a'
-                    ? `${shownTeamAPoints} PTS (WINNER${teamAIsChallenger ? ', CHALLENGER' : ''})`
+                    ? `${shownTeamAPoints.toFixed(2)} PTS (WINNER${teamAIsChallenger ? ', CHALLENGER' : ''})`
                     : selectedWinner === 'draw'
-                      ? `${shownTeamAPoints} PTS (DRAW${teamAIsChallenger ? ', CHALLENGER' : ''})`
-                      : `0 PTS (LOSER${teamAIsChallenger ? ', CHALLENGER' : ''})`}
+                      ? `${shownTeamAPoints.toFixed(2)} PTS (DRAW${teamAIsChallenger ? ', CHALLENGER' : ''})`
+                      : `0.00 PTS (LOSER${teamAIsChallenger ? ', CHALLENGER' : ''})`}
                 </div>
               </div>
               <div>
@@ -901,10 +901,10 @@ export const Round3RobotWarView: React.FC = () => {
                 <div className="font-bold text-white truncate">{teamBSchool.name}</div>
                 <div className="text-blue-400 font-mono font-bold text-sm mt-1">
                   {selectedWinner === 'team_b'
-                    ? `${shownTeamBPoints} PTS (WINNER${teamBIsChallenger ? ', CHALLENGER' : ''})`
+                    ? `${shownTeamBPoints.toFixed(2)} PTS (WINNER${teamBIsChallenger ? ', CHALLENGER' : ''})`
                     : selectedWinner === 'draw'
-                      ? `${shownTeamBPoints} PTS (DRAW${teamBIsChallenger ? ', CHALLENGER' : ''})`
-                      : `0 PTS (LOSER${teamBIsChallenger ? ', CHALLENGER' : ''})`}
+                      ? `${shownTeamBPoints.toFixed(2)} PTS (DRAW${teamBIsChallenger ? ', CHALLENGER' : ''})`
+                      : `0.00 PTS (LOSER${teamBIsChallenger ? ', CHALLENGER' : ''})`}
                 </div>
               </div>
             </div>
@@ -930,14 +930,14 @@ export const Round3RobotWarView: React.FC = () => {
               <div className="flex justify-between items-center">
                 <span className="text-slate-400">Time Left:</span>
                 <span className="font-mono font-bold text-red-300">
-                  {timeLeftSeconds} seconds (out of 90s)
+                  {timeLeftSeconds.toFixed(2)} seconds (out of 90.00s)
                 </span>
               </div>
 
               <div className="flex justify-between items-center pt-2 border-t-2 border-slate-700 font-bold">
                 <span className="text-white text-sm">{selectedWinner === 'draw' && !challengerId ? 'EACH TEAM AWARDED:' : 'POINTS RECORDED:'}</span>
                 <span className="text-2xl font-display font-black text-red-400">
-                  {shownMainPoints} PTS
+                  {shownMainPoints.toFixed(2)} PTS
                 </span>
               </div>
             </div>

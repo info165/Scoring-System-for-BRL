@@ -272,18 +272,22 @@ export const Round1BlockPushView: React.FC = () => {
 
   // Timer STOP
   const handleStopTimer = () => {
-    stopTimer();
-    stopActiveRun(currentUser, effectiveTimeLeft);
+    const frozen = stopTimer();
+    stopActiveRun(currentUser, frozen);
     if (selectedSchoolId) {
       saveBlockPushDraft(selectedSchoolId, {
         ...scoreCalculation,
+        timeLeftSeconds: frozen,
+        timeBonus: frozen,
+        finalScore: calculatedBlockScore + frozen,
+        calculatedScore: calculatedBlockScore + frozen,
         isDraft: true,
         notes: operatorNotes
       });
     }
   };
 
-  // Reset current run (restores 01:20, clears all blocks, and discards draft without saving to database)
+  // Reset current run (restores 120.00, clears all blocks, and discards draft without saving to database)
   const handleConfirmResetRun = () => {
     setBlockStatuses({
       '200g': 'none',
@@ -304,7 +308,7 @@ export const Round1BlockPushView: React.FC = () => {
       discardDraftRun(selectedSchoolId, 1);
     }
 
-    setFeedbackMsg({ text: 'Run reset. Timer restored to 01:20 and score reset to 0.', type: 'info' });
+    setFeedbackMsg({ text: 'Run reset. Timer restored to 120.00 and score reset to 0.00.', type: 'info' });
     setTimeout(() => setFeedbackMsg(null), 3000);
   };
 
@@ -318,7 +322,7 @@ export const Round1BlockPushView: React.FC = () => {
     });
 
     setFeedbackMsg({ 
-      text: `Score of ${scoreCalculation.finalScore} PTS published for ${activeSchool?.name} (${activeSchool?.teamName})!`, 
+      text: `Score of ${scoreCalculation.finalScore.toFixed(2)} PTS published for ${activeSchool?.name} (${activeSchool?.teamName})!`, 
       type: 'success' 
     });
     setTimeout(() => setFeedbackMsg(null), 4000);
@@ -648,10 +652,10 @@ export const Round1BlockPushView: React.FC = () => {
               {isTimeOver ? (
                 <div>
                   <div className="text-6xl sm:text-7xl font-mono font-black text-red-500 tracking-wider">
-                    00:00
+                    0.00
                   </div>
                   <div className="text-sm font-display font-black text-red-400 uppercase mt-0.5">
-                    TIME OVER (0 TIME BONUS)
+                    TIME OVER (0.00 TIME BONUS)
                   </div>
                 </div>
               ) : (
@@ -667,7 +671,7 @@ export const Round1BlockPushView: React.FC = () => {
               )}
 
               <div className="text-xs font-mono text-slate-400 mt-1">
-                Time Left: <span className="font-bold text-white">{effectiveTimeLeft}s</span> (Bonus: +{effectiveTimeLeft} pts)
+                Time Left: <span className="font-bold text-white">{effectiveTimeLeft.toFixed(2)}s</span> (Bonus: +{effectiveTimeLeft.toFixed(2)} pts)
               </div>
             </div>
 
@@ -770,7 +774,7 @@ export const Round1BlockPushView: React.FC = () => {
               <div className="bg-slate-950 p-3 rounded-xl border border-slate-800/80">
                 <div className="text-slate-400 font-mono text-[11px]">BLOCK POINTS</div>
                 <div className="text-2xl font-display font-black text-white mt-0.5">
-                  {scoreCalculation.blockScore}
+                  {scoreCalculation.blockScore.toFixed(2)}
                   <span className="text-xs font-normal text-slate-400 ml-1">pts</span>
                 </div>
               </div>
@@ -779,11 +783,11 @@ export const Round1BlockPushView: React.FC = () => {
                 <div className="text-slate-400 font-mono text-[11px] flex justify-between">
                   <span>TIME BONUS</span>
                   <span className="text-slate-500">
-                    {!isRunStarted ? '0s' : isTimeOver ? '0s' : `${effectiveTimeLeft}s`}
+                    {!isRunStarted ? '0.00s' : isTimeOver ? '0.00s' : `${effectiveTimeLeft.toFixed(2)}s`}
                   </span>
                 </div>
                 <div className="text-2xl font-display font-black text-cyan-400 mt-0.5">
-                  {scoreCalculation.timeBonus > 0 ? `+${scoreCalculation.timeBonus}` : '0'}
+                  {scoreCalculation.timeBonus > 0 ? `+${scoreCalculation.timeBonus.toFixed(2)}` : '0.00'}
                   <span className="text-xs font-normal text-slate-400 ml-1">pts</span>
                 </div>
               </div>
@@ -796,11 +800,11 @@ export const Round1BlockPushView: React.FC = () => {
                   {isPublished && !isRerunInProgress ? 'OFFICIAL SCORE' : 'CALCULATED SCORE'}
                 </div>
                 <div className="text-xs text-slate-400">
-                  {scoreCalculation.blockScore} (Blocks) + {scoreCalculation.timeBonus} (Time Bonus)
+                  {scoreCalculation.blockScore.toFixed(2)} (Blocks) + {scoreCalculation.timeBonus.toFixed(2)} (Time Bonus)
                 </div>
               </div>
               <div className="text-4xl sm:text-5xl font-display font-black text-amber-400 tracking-tight">
-                {scoreCalculation.finalScore}
+                {scoreCalculation.finalScore.toFixed(2)}
                 <span className="text-xs font-normal text-slate-400 ml-1.5">PTS</span>
               </div>
             </div>
@@ -890,12 +894,13 @@ export const Round1BlockPushView: React.FC = () => {
                   type="number"
                   min="0"
                   max="120"
+                  step="0.01"
                   value={manualTimeBonus !== null ? manualTimeBonus : effectiveTimeLeft}
                   onChange={(e) => setManualTimeBonus(Math.max(0, Math.min(120, Number(e.target.value))))}
                   className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-white font-mono text-base focus:border-blue-500 focus:outline-none"
                 />
                 <div className="text-[11px] text-slate-500 mt-1">
-                  Overrides automatic timer calculation (0 - 120 pts).
+                  Overrides automatic timer calculation (0.00 - 120.00 pts).
                 </div>
               </div>
 
@@ -914,7 +919,7 @@ export const Round1BlockPushView: React.FC = () => {
               <div className="bg-slate-950 p-3 rounded-xl border border-slate-800 text-xs flex justify-between items-center">
                 <span className="text-slate-400">Calculated Final Score:</span>
                 <span className="text-xl font-mono font-black text-amber-400">
-                  {scoreCalculation.blockScore + (manualTimeBonus !== null ? manualTimeBonus : effectiveTimeLeft)} PTS
+                  {(scoreCalculation.blockScore + (manualTimeBonus !== null ? manualTimeBonus : effectiveTimeLeft)).toFixed(2)} PTS
                 </span>
               </div>
             </div>
@@ -952,7 +957,7 @@ export const Round1BlockPushView: React.FC = () => {
             </div>
 
             <p className="text-xs text-slate-300 leading-relaxed">
-              This will clear all block selections, restore the timer to <strong className="text-white">01:20</strong>, and reset the score for <strong className="text-amber-300">{activeSchool ? `${activeSchool.name} (${activeSchool.teamName})` : 'the active team'}</strong>.
+              This will clear all block selections, restore the timer to <strong className="text-white">120.00</strong>, and reset the score for <strong className="text-amber-300">{activeSchool ? `${activeSchool.name} (${activeSchool.teamName})` : 'the active team'}</strong>.
             </p>
 
             <div className="flex items-center gap-2 pt-2 border-t border-slate-800">

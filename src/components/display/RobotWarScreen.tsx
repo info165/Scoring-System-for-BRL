@@ -133,7 +133,7 @@ export const RobotWarScreen: React.FC = () => {
                 <div className="mt-8 pt-4 border-t border-slate-800 flex items-center justify-between">
                   <span className="text-xs font-mono text-slate-400">{activeRobotWarMatch.challengerId === teamASchool.id ? 'CHALLENGER • NO POINTS' : 'WAR POINTS AWARDED:'}</span>
                   <span className="font-display font-black text-4xl text-cyan-300 font-mono">
-                    {activeRobotWarMatch.teamAPoints} <span className="text-sm font-normal text-slate-400">PTS</span>
+                    {(activeRobotWarMatch.teamAPoints || 0).toFixed(2)} <span className="text-sm font-normal text-slate-400">PTS</span>
                   </span>
                 </div>
               </div>
@@ -197,7 +197,7 @@ export const RobotWarScreen: React.FC = () => {
                 <div className="mt-8 pt-4 border-t border-slate-800 flex items-center justify-between">
                   <span className="text-xs font-mono text-slate-400">{activeRobotWarMatch.challengerId === teamBSchool.id ? 'CHALLENGER • NO POINTS' : 'WAR POINTS AWARDED:'}</span>
                   <span className="font-display font-black text-4xl text-rose-300 font-mono">
-                    {activeRobotWarMatch.teamBPoints} <span className="text-sm font-normal text-slate-400">PTS</span>
+                    {(activeRobotWarMatch.teamBPoints || 0).toFixed(2)} <span className="text-sm font-normal text-slate-400">PTS</span>
                   </span>
                 </div>
               </div>

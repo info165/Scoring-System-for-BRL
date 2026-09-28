@@ -146,19 +146,35 @@ export function playTimeOverBuzzerSound(): void {
 }
 
 /**
- * Formats seconds left strictly to the BRL Official Match Specification:
- * - 120s -> "01:20"
- * - 119s -> "01:19"
- * - 100s -> "01:00"
- * - 47s  -> "00:47"
- * - 10s  -> "00:10"
- * - 0s   -> "00:00"
+ * Rounds a number to exactly two decimal places using standard mathematical rounding.
+ */
+export function roundToTwoDecimals(val: number): number {
+  return Math.round(((val || 0) + Number.EPSILON) * 100) / 100;
+}
+
+/**
+ * Formats scores to exactly two decimal places (e.g., "170.50", "90.00", "0.00").
+ */
+export function formatScore(score: number | null | undefined): string {
+  const rounded = roundToTwoDecimals(score ?? 0);
+  return rounded.toFixed(2);
+}
+
+/**
+ * Formats competition timer strictly as SECONDS.HUNDREDTHS with exactly two decimal places.
+ * - 120.00 -> "120.00"
+ * - 119.99 -> "119.99"
+ * - 95.42  -> "95.42"
+ * - 47.83  -> "47.83"
+ * - 10.25  -> "10.25"
+ * - 9.99   -> "9.99"
+ * - 1.50   -> "1.50"
+ * - 0.50   -> "0.50"
+ * - 0.01   -> "0.01"
+ * - 0.00   -> "0.00"
+ * DO NOT display minutes (no 01:20). DO NOT display 4 or 6 decimal places.
  */
 export function formatBrlTimer(seconds: number): string {
-  const s = Math.max(0, Math.floor(seconds || 0));
-  if (s >= 100) {
-    const rem = s - 100;
-    return `01:${rem < 10 ? '0' : ''}${rem}`;
-  }
-  return `00:${s < 10 ? '0' : ''}${s}`;
+  const safe = Math.max(0, roundToTwoDecimals(seconds || 0));
+  return safe.toFixed(2);
 }

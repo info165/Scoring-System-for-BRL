@@ -8,6 +8,7 @@ import {
 } from 'lucide-react';
 import { useCompetition } from '../../context/CompetitionContext';
 import { useArenaTimer } from '../../hooks/useArenaTimer';
+import { getRoundDurationSeconds } from '../../data/officialRules';
 
 export const NowPlayingScreen: React.FC = () => {
   const { 
@@ -160,7 +161,7 @@ export const NowPlayingScreen: React.FC = () => {
                   {isTimeOver ? (
                     <div className="space-y-1">
                       <div className="text-6xl sm:text-8xl font-mono font-black text-red-500 tracking-wider animate-pulse">
-                        00:00
+                        0.00
                       </div>
                       <div className="text-2xl sm:text-3xl font-display font-black text-red-400 tracking-wider uppercase">
                         TIME OVER
@@ -172,7 +173,9 @@ export const NowPlayingScreen: React.FC = () => {
                         ? 'text-red-500 drop-shadow-[0_0_25px_rgba(239,68,68,0.5)]' 
                         : timerStatus === 'running' 
                           ? 'text-amber-400 drop-shadow-[0_0_20px_rgba(245,158,11,0.25)]' 
-                          : 'text-slate-100'
+                          : timerStatus === 'stopped'
+                            ? 'text-indigo-200'
+                            : 'text-slate-100'
                     }`}>
                       {formattedTime}
                     </div>
@@ -185,7 +188,9 @@ export const NowPlayingScreen: React.FC = () => {
                         ? 'text-emerald-400' 
                         : isTimeOver 
                           ? 'text-red-400' 
-                          : 'text-amber-400'
+                          : timerStatus === 'stopped'
+                            ? 'text-indigo-300'
+                            : 'text-amber-400'
                     }`}>
                       {timerStatus === 'running' ? 'CLOCK RUNNING' : isTimeOver ? 'STOPPED (TIME OVER)' : timerStatus === 'stopped' ? 'CLOCK STOPPED' : 'AWAITING START'}
                     </span>
@@ -193,7 +198,7 @@ export const NowPlayingScreen: React.FC = () => {
                 </div>
 
                 <div className="pt-3 border-t border-slate-800/80 flex items-center justify-between text-[11px] font-mono text-slate-500">
-                  <span>OFFICIAL ROUND TIME: 120 SECONDS</span>
+                  <span>OFFICIAL ROUND TIME: {getRoundDurationSeconds(state.currentRound)}.00 SECONDS</span>
                   <span>SCORES RELEASED ON LEADERBOARD AFTER RUN</span>
                 </div>
               </div>

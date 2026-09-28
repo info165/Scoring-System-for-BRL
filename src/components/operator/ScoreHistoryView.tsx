@@ -154,7 +154,7 @@ export const ScoreHistoryView: React.FC = () => {
                     )}
                     {(log.oldScore !== undefined || log.newScore !== undefined) && (
                       <div className="text-slate-400 text-[10px] font-mono pl-0.5">
-                        Score change: {log.oldScore ?? 0} pts &rarr; <strong className="text-amber-300">{log.newScore ?? 0} pts</strong>
+                        Score change: {typeof log.oldScore === 'number' ? log.oldScore.toFixed(2) : (log.oldScore ?? '0.00')} pts &rarr; <strong className="text-amber-300">{typeof log.newScore === 'number' ? log.newScore.toFixed(2) : (log.newScore ?? '0.00')} pts</strong>
                       </div>
                     )}
                   </div>

@@ -142,7 +142,7 @@ export interface AppUser {
   displayName: string;
   role: UserRole;
   createdAt?: string;
-  lastLogin?: string;
+  lastLogin?: string | null;
   isActive?: boolean;
 }
 
@@ -167,7 +167,7 @@ export interface ActiveRunState {
     email: string;
     displayName: string;
     role: string;
-  };
+  } | null;
 }
 
 export interface RunQueue {

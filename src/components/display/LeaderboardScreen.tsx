@@ -175,34 +175,34 @@ export const LeaderboardScreen: React.FC = () => {
                             {/* R1 (Blue) */}
                             <td className="py-4 px-6 text-center font-mono">
                               <span className="px-2.5 py-1 rounded-lg bg-blue-950/80 border border-blue-800 text-blue-300 font-bold text-xs">
-                                {entry.round1Score}
+                                {entry.round1Score.toFixed(2)}
                               </span>
                             </td>
 
                             {/* R2 (Green) */}
                             <td className="py-4 px-6 text-center font-mono">
                               <span className="px-2.5 py-1 rounded-lg bg-emerald-950/80 border border-emerald-800 text-emerald-300 font-bold text-xs">
-                                {entry.round2Score}
+                                {entry.round2Score.toFixed(2)}
                               </span>
                             </td>
 
                             {/* R3 (Red) */}
                             <td className="py-4 px-6 text-center font-mono">
                               <span className="px-2.5 py-1 rounded-lg bg-red-950/80 border border-red-800 text-red-300 font-bold text-xs">
-                                {entry.round3Score}
+                                {entry.round3Score.toFixed(2)}
                               </span>
                             </td>
 
                             {/* Total (Gold) */}
                             <td className="py-4 px-6 text-right font-mono font-black text-xl sm:text-2xl text-amber-400">
-                              {entry.totalScore}
+                              {entry.totalScore.toFixed(2)}
                               <span className="text-xs font-normal text-slate-400 ml-1">pts</span>
                             </td>
                           </>
                         ) : (
                           /* Single Round Score (Gold) */
                           <td className="py-4 px-6 text-right font-mono font-black text-xl sm:text-2xl text-amber-400">
-                            {filter === 1 ? entry.round1Score : filter === 2 ? entry.round2Score : entry.round3Score}
+                            {(filter === 1 ? entry.round1Score : filter === 2 ? entry.round2Score : entry.round3Score).toFixed(2)}
                             <span className="text-xs font-normal text-slate-400 ml-1">pts</span>
                           </td>
                         )}
